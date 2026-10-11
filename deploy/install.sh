@@ -14,6 +14,8 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 say()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[!] %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m[x] %s\033[0m\n' "$*" >&2; exit 1; }
+# Never stop silently: report which command failed.
+trap 'printf "\033[1;31m[x] Przerwano w linii %s: %s (kod %s)\033[0m\n" "$LINENO" "$BASH_COMMAND" "$?" >&2' ERR
 
 [[ -n "$DOMAIN" ]] || die "Podaj domenę, np.: sudo ./install.sh rozmowa.tutaj.eu.org"
 [[ "$DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] || die "Nieprawidłowa domena: $DOMAIN"
@@ -68,16 +70,20 @@ fi
 
 # --- Firewall ---------------------------------------------------------------------
 say "Zapora (ufw)"
-SSH_PORT="$(ss -tlnpH 2>/dev/null | awk '/sshd/ {sub(/.*:/, "", $4); print $4; exit}')"
-SSH_PORT="${SSH_PORT:-22}"
+# Best effort: the SSH port only matters for the ufw rule; fall back to 22.
+SSH_PORT="$({ ss -tlnp 2>/dev/null || true; } | awk '/sshd/ && !found {n = split($4, a, ":"); print a[n]; found = 1}')"
+[[ "$SSH_PORT" =~ ^[0-9]+$ ]] || SSH_PORT=22
+echo "Port SSH: $SSH_PORT"
 if command -v ufw >/dev/null 2>&1; then
-  ufw allow "$SSH_PORT/tcp" comment 'SSH' >/dev/null
-  ufw allow 80/tcp comment 'Tutaj HTTP' >/dev/null
-  ufw allow 443/tcp comment 'Tutaj HTTPS' >/dev/null
-  ufw allow 3478 comment 'Tutaj TURN' >/dev/null
-  ufw allow 40000 comment 'Tutaj SFU' >/dev/null
-  ufw allow 49160:49200/udp comment 'Tutaj TURN relay' >/dev/null
-  if ufw status | grep -q 'Status: active'; then
+  ufw_ok=1
+  for rule in "$SSH_PORT/tcp" 80/tcp 443/tcp 3478 40000 49160:49200/udp; do
+    if ! ufw allow "$rule" >/dev/null 2>&1; then
+      warn "Nie udało się dodać reguły ufw: $rule"
+      ufw_ok=0
+    fi
+  done
+  if [[ $ufw_ok -eq 1 ]]; then echo "Reguły ufw dodane: $SSH_PORT/tcp, 80/tcp, 443/tcp, 3478, 40000, 49160:49200/udp."; fi
+  if ufw status 2>/dev/null | grep -q 'Status: active'; then
     echo "Reguły dodane do aktywnej zapory ufw."
   else
     warn "ufw jest wyłączony — dodałem reguły, ale go NIE włączam (SSH na porcie $SSH_PORT jest dozwolony, gdybyś chciał: ufw enable)."
