@@ -7,9 +7,16 @@ import { $, fillDeviceSelect } from './ui/dom';
 import { setIcon } from './ui/icons';
 
 /** Exposed by the Electron preload when running as the desktop app. */
+interface DesktopInfo {
+  /** remote: window onto the Tutaj server; lan: the app hosts calls on the local network. */
+  mode: 'remote' | 'lan';
+  serverUrl: string;
+  lan: { lanUrls: string[]; httpPort: number } | null;
+}
 interface DesktopBridge {
   isDesktop: true;
-  hostInfo(): Promise<{ lanUrls: string[]; httpPort: number } | null>;
+  info(): Promise<DesktopInfo | null>;
+  switchMode(mode: 'remote' | 'lan'): Promise<void>;
 }
 declare global {
   interface Window {
@@ -123,7 +130,7 @@ async function initLobby(): Promise<void> {
     void join();
   });
 
-  void showHostInfo();
+  void showDesktopInfo();
 
   const problems = await media.start(true, true);
   if (problems.length) showError(`${problems.join('. ')}. Możesz dołączyć bez nich.`);
@@ -138,20 +145,41 @@ async function initLobby(): Promise<void> {
   await refreshDevices(); // labels are only available after permission is granted
 }
 
-async function showHostInfo(): Promise<void> {
-  const info = await window.tutaj?.hostInfo().catch(() => null);
-  if (!info) return;
+/** Desktop app: show which mode it runs in and let the user switch (the app restarts). */
+async function showDesktopInfo(): Promise<void> {
+  const bridge = window.tutaj;
+  const info = await bridge?.info?.().catch(() => null);
+  if (!bridge || !info) return;
   const box = $('host-info');
   box.hidden = false;
   box.replaceChildren();
   const title = document.createElement('strong');
-  title.textContent = 'Ta aplikacja jest hostem w sieci lokalnej.';
-  box.append(title, document.createElement('br'));
-  box.append(
-    info.lanUrls.length
-      ? `Inni w tej samej sieci dołączą przez przeglądarkę: ${info.lanUrls.join(' lub ')} (zaakceptuj certyfikat) albo z aplikacji desktopowej, wpisując ${info.lanUrls[0].replace(/^https:\/\/([^:]+):\d+/, `$1:${info.httpPort}`)} jako serwer.`
-      : 'Nie wykryto sieci lokalnej.',
-  );
+  const switchBtn = document.createElement('button');
+  switchBtn.type = 'button';
+  switchBtn.className = 'ghost host-switch';
+  const serverHost = new URL(info.serverUrl).host;
+
+  if (info.mode === 'remote') {
+    title.textContent = `Połączono z serwerem ${serverHost}.`;
+    box.append(title, document.createElement('br'), 'Bez internetu możesz poprowadzić rozmowę w sieci lokalnej — ta aplikacja stanie się jej serwerem.');
+    switchBtn.textContent = 'Przełącz na tryb lokalny (sieć LAN)';
+    switchBtn.onclick = () => void bridge.switchMode('lan');
+    // The app is dedicated to its server; a custom signaling server makes no sense here.
+    $('server').closest('label')?.setAttribute('hidden', '');
+  } else {
+    title.textContent = 'Tryb lokalny: ta aplikacja jest serwerem w sieci lokalnej.';
+    const lan = info.lan;
+    box.append(
+      title,
+      document.createElement('br'),
+      lan?.lanUrls.length
+        ? `Inni w tej samej sieci dołączą przez przeglądarkę: ${lan.lanUrls.join(' lub ')} (zaakceptuj certyfikat) albo z aplikacji desktopowej w trybie lokalnym, wpisując ${lan.lanUrls[0].replace(/^https:\/\/([^:]+):\d+/, `$1:${lan.httpPort}`)} jako serwer.`
+        : 'Nie wykryto sieci lokalnej.',
+    );
+    switchBtn.textContent = `Wróć do serwera ${serverHost}`;
+    switchBtn.onclick = () => void bridge.switchMode('remote');
+  }
+  box.append(switchBtn);
 }
 
 async function join(): Promise<void> {

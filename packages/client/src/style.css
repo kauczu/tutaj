@@ -141,6 +141,7 @@ summary { cursor: pointer; color: var(--muted); font-size: 14px; }
   border-radius: 12px; padding: 10px 12px; line-height: 1.5; word-break: break-word;
 }
 .host-info strong { color: var(--text); }
+.host-switch { display: block; margin-top: 10px; width: 100%; font-size: 13px; padding: 8px 12px; }
 
 /* ---- Room ---- */
 .room { height: 100%; display: grid; grid-template-columns: 1fr auto; grid-template-rows: 1fr auto; }

@@ -7,7 +7,7 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 
 | Tryb | Czego potrzeba | Dla kogo |
 |---|---|---|
-| **Desktop – host w LAN** | nic poza aplikacją | spotkania w jednej sieci (dom, biuro) |
+| **Desktop** | instalator `.exe` | domyślnie klient `o.tutaj.eu.org`; tryb lokalny: host w sieci LAN bez internetu |
 | **Własny serwer** | VPS + domena (Docker) | rozmowy przez internet, z TURN dla trudnych sieci |
 | **Dev** | Node.js 22+ | rozwój |
 
@@ -58,23 +58,31 @@ Pierwsze uruchomienie wymaga przeglądarki: `npx playwright install chromium`.
 CI (`.github/workflows/ci.yml`): typecheck, build, testy serwera i E2E na Linuksie, testy serwera na Windowsie,
 budowanie i test dymny obrazu Dockera.
 
-## Aplikacja desktopowa (host bez zewnętrznego serwera)
+## Aplikacja desktopowa
 
 ```bash
 npm run desktop
 ```
 
-Aplikacja uruchamia wbudowany serwer i pokazuje w lobby adresy, pod którymi inni w tej samej sieci mogą dołączyć:
+Aplikacja ma dwa tryby, przełączane w lobby (wybór jest zapamiętywany, aplikacja uruchamia się ponownie):
+
+**Serwer `o.tutaj.eu.org` (domyślny)** – okno aplikacji to klient serwera Tutaj: interfejs pochodzi z serwera, więc
+po jego aktualizacji aplikacja od razu ma nową wersję. Aplikacja dodaje natywny wybór ekranu/okna do udostępniania,
+uprawnienia do kamery bez pytań i otwieranie linków w przeglądarce. Gdy serwer jest nieosiągalny, pokazuje ekran
+„Brak połączenia” z ponowieniem (także automatycznie po powrocie internetu) i przejściem do trybu lokalnego.
+
+**Tryb lokalny (sieć LAN, bez internetu)** – aplikacja sama jest serwerem (sygnalizacja + SFU) i pokazuje w lobby adresy,
+pod którymi inni w tej samej sieci mogą dołączyć:
 
 - **z przeglądarki**: `https://<IP-hosta>:3443` – przy pierwszym wejściu trzeba zaakceptować certyfikat (self-signed,
   generowany i zapamiętywany przez aplikację). HTTPS jest konieczny, bo przeglądarki udostępniają kamerę tylko w bezpiecznym kontekście.
-- **z drugiej aplikacji desktopowej**: w „Ustawieniach zaawansowanych” wpisz `<IP-hosta>:3000` jako serwer sygnalizacji.
+- **z drugiej aplikacji desktopowej** (też w trybie lokalnym): w „Ustawieniach zaawansowanych” wpisz `<IP-hosta>:3000` jako serwer.
 
-Host ma też wbudowane SFU (port 40000 udp+tcp) dla pokoi 3–4 osób, w których mesh nie daje rady.
-
-Zmienne: `TUTAJ_PORT` (3000), `TUTAJ_HTTPS_PORT` (3443), `TUTAJ_LAN=0` (tylko ta maszyna),
-`TUTAJ_SFU=0` (bez SFU), `TUTAJ_SFU_PORT` (40000).
 Windows zapyta o zgodę zapory na połączenia przychodzące – trzeba ją dać dla sieci prywatnych.
+
+Zmienne (dla zaawansowanych i testów): `TUTAJ_MODE` (`remote`/`lan`), `TUTAJ_SERVER_URL` (domyślnie `https://o.tutaj.eu.org`),
+`TUTAJ_USER_DATA` (osobny profil), w trybie lokalnym `TUTAJ_PORT` (3000), `TUTAJ_HTTPS_PORT` (3443),
+`TUTAJ_LAN=0` (tylko ta maszyna), `TUTAJ_SFU=0` (bez SFU), `TUTAJ_SFU_PORT` (40000).
 
 > Jeśli `npm run desktop` zgłasza brak pliku binarnego Electrona: `node node_modules/electron/install.js`.
 
