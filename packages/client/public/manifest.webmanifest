@@ -1,0 +1,13 @@
+{
+  "name": "Tutaj",
+  "short_name": "Tutaj",
+  "description": "Wideorozmowy dla 2–4 osób — spotkajmy się tutaj.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#02060c",
+  "theme_color": "#02060c",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

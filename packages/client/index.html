@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#02060c" />
+    <meta name="description" content="Tutaj — wideorozmowy dla 2–4 osób." />
+    <link rel="preload" href="/background.webp" as="image" type="image/webp" media="(min-width: 701px)" />
+    <link rel="preload" href="/background-mobile.webp" as="image" type="image/webp" media="(max-width: 700px)" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Tutaj</title>
+  </head>
+  <body>
+    <!-- Lobby -->
+    <main id="lobby" class="lobby">
+      <section class="lobby-card">
+        <header class="brand">
+          <img src="/icon.svg" alt="" width="52" height="52" />
+          <div>
+            <h1>Tutaj</h1>
+            <p>Wideorozmowy dla 2–4 osób — spotkajmy się tutaj.</p>
+          </div>
+        </header>
+
+        <div class="preview">
+          <video id="preview-video" autoplay playsinline muted></video>
+          <div id="preview-placeholder" class="preview-placeholder">Kamera wyłączona</div>
+          <div class="preview-controls">
+            <button id="preview-mic" class="round" type="button" aria-pressed="true" title="Mikrofon"></button>
+            <button id="preview-cam" class="round" type="button" aria-pressed="true" title="Kamera"></button>
+          </div>
+          <div id="preview-meter" class="meter"><span></span></div>
+        </div>
+
+        <form id="join-form" class="join-form" autocomplete="on">
+          <label>Twoje imię
+            <input id="name" name="name" required maxlength="40" placeholder="np. Ania" autocomplete="nickname" />
+          </label>
+          <label>Pokój
+            <div class="row">
+              <input id="room" name="room" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" title="Litery, cyfry, - i _" />
+              <button id="random-room" type="button" class="ghost" title="Losowa nazwa">↻</button>
+            </div>
+          </label>
+
+          <details>
+            <summary>Urządzenia i ustawienia zaawansowane</summary>
+            <label>Mikrofon <select id="audio-input"></select></label>
+            <label>Kamera <select id="video-input"></select></label>
+            <label>Hasło pokoju (opcjonalnie)
+              <input id="password" type="password" maxlength="128" autocomplete="off" placeholder="ustala je pierwsza osoba w pokoju" />
+            </label>
+            <label>Serwer sygnalizacji
+              <input id="server" maxlength="200" placeholder="domyślnie: ten sam co strona (np. 192.168.1.5:3000)" />
+            </label>
+          </details>
+
+          <div id="host-info" class="host-info" hidden></div>
+          <p id="lobby-error" class="error" role="alert" hidden></p>
+          <button id="join" class="primary" type="submit">Dołącz</button>
+        </form>
+      </section>
+    </main>
+
+    <!-- Room -->
+    <main id="room-view" class="room" hidden>
+      <div class="stage">
+        <div id="grid" class="grid"></div>
+        <div id="reconnecting" class="banner" role="status" hidden></div>
+      </div>
+
+      <aside id="chat" class="chat" hidden>
+        <header>
+          <h2>Czat</h2>
+          <button id="chat-close" class="ghost" type="button" title="Zamknij">✕</button>
+        </header>
+        <ol id="chat-list" class="chat-list" aria-live="polite"></ol>
+        <form id="chat-form" class="chat-form">
+          <button id="chat-file" class="ghost" type="button" title="Wyślij plik"></button>
+          <input id="chat-file-input" type="file" multiple hidden />
+          <input id="chat-input" maxlength="2000" placeholder="Napisz wiadomość…" autocomplete="off" />
+          <button class="primary" type="submit">Wyślij</button>
+        </form>
+      </aside>
+
+      <footer class="controls">
+        <div class="room-info">
+          <span id="room-name"></span>
+          <span id="mode-badge" class="mode-badge mesh">P2P</span>
+          <span id="timer">00:00</span>
+        </div>
+        <div class="buttons">
+          <button id="btn-mic" class="round" type="button" title="Mikrofon (M)"></button>
+          <button id="btn-cam" class="round" type="button" title="Kamera (V)"></button>
+          <button id="btn-screen" class="round" type="button" title="Udostępnij ekran (S)"></button>
+          <button id="btn-hand" class="round" type="button" title="Podnieś rękę (H)"></button>
+          <button id="btn-chat" class="round" type="button" title="Czat (C)"><span id="chat-badge" class="badge" hidden></span></button>
+          <button id="btn-record" class="round" type="button" title="Nagrywaj lokalnie"></button>
+          <button id="btn-settings" class="round" type="button" title="Ustawienia"></button>
+          <button id="btn-leave" class="round danger" type="button" title="Opuść"></button>
+        </div>
+        <div class="room-actions">
+          <button id="btn-invite" class="ghost" type="button">Kopiuj zaproszenie</button>
+        </div>
+      </footer>
+
+      <dialog id="settings">
+        <form method="dialog" class="settings-form">
+          <h2>Ustawienia</h2>
+          <label>Mikrofon <select id="set-audio-input"></select></label>
+          <label>Kamera <select id="set-video-input"></select></label>
+          <label id="set-audio-output-wrap">Głośnik <select id="set-audio-output"></select></label>
+          <label>Tryb mediów
+            <select id="set-mode">
+              <option value="auto">Automatyczny</option>
+              <option value="mesh">P2P (bezpośrednio)</option>
+              <option value="sfu">SFU (przez serwer)</option>
+            </select>
+          </label>
+          <p id="mode-info" class="muted small"></p>
+          <div id="peer-stats" class="peer-stats"></div>
+          <button class="primary" value="close">Zamknij</button>
+        </form>
+      </dialog>
+    </main>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "tutaj",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Wideorozmowy WebRTC dla 2-4 osób: P2P mesh, opcjonalny serwer, PWA i desktop.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/client",
+    "packages/desktop"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev -w @tutaj/server\" \"npm run dev -w @tutaj/client\"",
+    "build": "npm run build -w @tutaj/client && npm run build -w @tutaj/server",
+    "start": "npm start -w @tutaj/server",
+    "desktop": "npm run build && npm start -w @tutaj/desktop",
+    "typecheck": "npm run typecheck -w @tutaj/client && npm run typecheck -w @tutaj/server"
+  },
+  "devDependencies": {
+    "concurrently": "9.1.0",
+    "typescript": "5.6.3"
+  }
+}

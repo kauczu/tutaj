@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#101f48"/>
+      <stop offset="1" stop-color="#02060c"/>
+    </linearGradient>
+    <radialGradient id="earth" cx="0.5" cy="0" r="1">
+      <stop offset="0" stop-color="#2a5f95"/>
+      <stop offset="0.35" stop-color="#002050"/>
+      <stop offset="1" stop-color="#000405"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4d9aca" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#e8f4ff"/>
+      <stop offset="1" stop-color="#4d9aca" stop-opacity="0.2"/>
+    </linearGradient>
+    <radialGradient id="moon" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#e3eef7"/>
+      <stop offset="0.45" stop-color="#8fb4d6"/>
+      <stop offset="1" stop-color="#1e4770"/>
+    </radialGradient>
+    <radialGradient id="dawn" cx="0.42" cy="0.66" r="0.3">
+      <stop offset="0" stop-color="#a8c4d8" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#a8c4d8" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="tile"><rect width="64" height="64" rx="14"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="64" height="64" fill="url(#sky)"/>
+    <g fill="#ffffff">
+      <circle cx="10" cy="10" r="0.8" opacity="0.8"/>
+      <circle cx="22" cy="6" r="0.6" opacity="0.6"/>
+      <circle cx="31" cy="15" r="0.7" opacity="0.7"/>
+      <circle cx="54" cy="9" r="0.6" opacity="0.6"/>
+      <circle cx="8" cy="26" r="0.5" opacity="0.5"/>
+    </g>
+    <circle cx="47" cy="30" r="10" fill="url(#moon)"/>
+    <rect width="64" height="64" fill="url(#dawn)"/>
+    <ellipse cx="22" cy="88" rx="62" ry="48" fill="url(#earth)"/>
+    <ellipse cx="22" cy="88" rx="62" ry="48" fill="none" stroke="url(#rim)" stroke-width="1.6"/>
+  </g>
+</svg>
