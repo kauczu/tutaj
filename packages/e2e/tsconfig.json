@@ -6,7 +6,10 @@
     "lib": ["ES2022", "DOM"],
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    // Type-check against the server's sources, so this works before the server is built
+    // (at runtime the tests import the built package).
+    "paths": { "@tutaj/server": ["../server/src/server.ts"] }
   },
   "include": ["tests", "playwright.config.ts"]
 }
