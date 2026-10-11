@@ -10,6 +10,8 @@ export interface SfuOptions {
   announcedAddress?: string;
   /** Single UDP+TCP port for all media (default 40000). */
   port?: number;
+  /** Path to the mediasoup-worker binary (needed when it can't live in node_modules, e.g. a packaged app). */
+  workerBin?: string;
 }
 
 const MEDIA_CODECS: types.RouterRtpCodecCapability[] = [
@@ -67,7 +69,7 @@ export class Sfu {
   ) {}
 
   static async create(opts: SfuOptions, notify: Notify, onDied: (err: Error) => void): Promise<{ sfu: Sfu; address: string; port: number }> {
-    const worker = await mediasoup.createWorker({ logLevel: 'warn' });
+    const worker = await mediasoup.createWorker({ logLevel: 'warn', workerBin: opts.workerBin });
     const port = opts.port ?? 40000;
     const ip = opts.listenIp ?? '0.0.0.0';
     const address = opts.announcedAddress ?? lanAddresses()[0] ?? '127.0.0.1';

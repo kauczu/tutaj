@@ -2,15 +2,62 @@
   "name": "@tutaj/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Tutaj desktop — aplikacja z wbudowanym serwerem (host w sieci LAN).",
+  "description": "Tutaj — wideorozmowy dla 2–4 osób. Aplikacja z wbudowanym serwerem (host w sieci LAN).",
+  "author": "kauczu <kauczu@gmail.com>",
+  "license": "MIT",
   "main": "main.mjs",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64",
+    "pack": "electron-builder --win dir --x64"
   },
   "dependencies": {
     "@tutaj/server": "0.1.0"
   },
   "devDependencies": {
-    "electron": "44.4.5"
+    "electron": "44.4.5",
+    "electron-builder": "26.16.1"
+  },
+  "build": {
+    "appId": "org.eu.tutaj.desktop",
+    "productName": "Tutaj",
+    "copyright": "© 2026 kauczu",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "picker-preload.cjs",
+      "picker.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../client/dist",
+        "to": "client"
+      }
+    ],
+    "asarUnpack": [
+      "**/node_modules/mediasoup/worker/out/Release/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "artifactName": "Tutaj-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tutaj",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Tutaj",
+      "language": "1045"
+    }
   }
 }

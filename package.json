@@ -18,7 +18,8 @@
     "desktop": "npm run build && npm start -w @tutaj/desktop",
     "typecheck": "npm run typecheck -w @tutaj/client && npm run typecheck -w @tutaj/server && npm run typecheck -w @tutaj/e2e",
     "test": "npm test -w @tutaj/server",
-    "test:e2e": "npm test -w @tutaj/e2e"
+    "test:e2e": "npm test -w @tutaj/e2e",
+    "desktop:dist": "npm run build && npm run dist -w @tutaj/desktop"
   },
   "devDependencies": {
     "concurrently": "9.1.0",

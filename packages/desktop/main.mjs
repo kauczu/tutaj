@@ -9,6 +9,14 @@ const HTTPS_PORT = Number(process.env.TUTAJ_HTTPS_PORT ?? 3443);
 // TUTAJ_LAN=0 keeps the embedded server private to this machine.
 const LAN = process.env.TUTAJ_LAN !== '0';
 
+// In the installed app the web client ships as a resource, and mediasoup's worker binary sits
+// outside app.asar (a child process can't be spawned from inside the archive).
+const CLIENT_DIR = app.isPackaged ? join(process.resourcesPath, 'client') : undefined;
+const WORKER_BIN = app.isPackaged
+  ? join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'mediasoup', 'worker', 'out', 'Release',
+      process.platform === 'win32' ? 'mediasoup-worker.exe' : 'mediasoup-worker')
+  : undefined;
+
 let server = null;
 let mainWindow = null;
 
@@ -19,10 +27,14 @@ async function startEmbeddedServer() {
   const base = {
     host: LAN ? '0.0.0.0' : '127.0.0.1',
     tls: { selfSigned: true, cacheDir: join(app.getPath('userData'), 'certs') },
+    clientDir: CLIENT_DIR,
     // Invite links must point at an address other machines can open, not localhost.
     publicUrl: LAN ? 'lan' : null,
     // SFU on the host for rooms of 3–4 where a mesh can't cope; skipped silently if it can't start.
-    sfu: process.env.TUTAJ_SFU === '0' ? false : { listenIp: LAN ? '0.0.0.0' : '127.0.0.1', port: Number(process.env.TUTAJ_SFU_PORT ?? 40000) },
+    sfu:
+      process.env.TUTAJ_SFU === '0'
+        ? false
+        : { listenIp: LAN ? '0.0.0.0' : '127.0.0.1', port: Number(process.env.TUTAJ_SFU_PORT ?? 40000), workerBin: WORKER_BIN },
   };
   try {
     server = await startServer({ ...base, port: HTTP_PORT, httpsPort: LAN ? HTTPS_PORT : undefined });
@@ -90,6 +102,8 @@ async function createWindow() {
     title: 'Tutaj',
     backgroundColor: '#02060c',
     autoHideMenuBar: true,
+    // The installed .exe carries its own icon; in development use the PNG.
+    ...(app.isPackaged ? {} : { icon: join(here, 'build', 'icon.png') }),
     webPreferences: { preload: join(here, 'preload.cjs'), sandbox: true, contextIsolation: true },
   });
 

@@ -78,6 +78,23 @@ Windows zapyta o zgodę zapory na połączenia przychodzące – trzeba ją dać
 
 > Jeśli `npm run desktop` zgłasza brak pliku binarnego Electrona: `node node_modules/electron/install.js`.
 
+### Instalator Windows (.exe)
+
+```bash
+npm run desktop:dist     # → packages/desktop/release/Tutaj-Setup-<wersja>.exe (~120 MB)
+```
+
+Instalator NSIS (x64, po polsku): wybór katalogu, skrót na pulpicie i w menu Start, instalacja dla bieżącego
+użytkownika (bez uprawnień administratora). Klient WWW jest dołączony jako zasób, a `mediasoup-worker.exe` leży
+poza `app.asar`, bo musi być uruchamiany jako osobny proces.
+
+Wydanie na GitHubie: wypchnięcie tagu (`git tag v0.1.0 && git push origin v0.1.0`) uruchamia workflow
+`release.yml`, który buduje instalator i publikuje go w Releases. Ręczne uruchomienie workflow zapisuje
+instalator tylko jako artefakt.
+
+Instalator nie jest podpisany – Windows SmartScreen przy pierwszym uruchomieniu pokaże ostrzeżenie
+(„Więcej informacji” → „Uruchom mimo to”). Usunie je dopiero certyfikat do podpisywania kodu.
+
 ## Własny serwer (internet)
 
 `deploy/` zawiera gotowy zestaw: Tutaj + Caddy (automatyczny HTTPS) + coturn (TURN) oraz skrypt instalacyjny.
