@@ -94,6 +94,16 @@ jobs:
           docker compose -f deploy/docker-compose.yml config --quiet
           rm deploy/.env
 
+      - name: Validate reverse-proxy templates (nginx, Caddy, Apache)
+        run: |
+          r() { sed 's/__DOMAIN__/rozmowa.example.com/g; s/__PORT__/3000/g' "deploy/proxy/$1"; }
+          mkdir -p /tmp/proxy && r nginx.conf > /tmp/proxy/tutaj.conf && r Caddyfile > /tmp/proxy/Caddyfile && r apache.conf > /tmp/proxy/apache.conf
+          docker run --rm -v /tmp/proxy/tutaj.conf:/etc/nginx/conf.d/tutaj.conf:ro nginx:1.27-alpine nginx -t
+          docker run --rm -v /tmp/proxy/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker run --rm -v /tmp/proxy/apache.conf:/tmp/tutaj.conf:ro httpd:2.4 sh -c '
+            sed -i -E "s/^#(LoadModule (proxy_module|proxy_http_module|proxy_wstunnel_module|headers_module))/\1/" conf/httpd.conf &&
+            echo "Include /tmp/tutaj.conf" >> conf/httpd.conf && httpd -t'
+
       - name: Build image
         run: docker build -t tutaj:ci .
 

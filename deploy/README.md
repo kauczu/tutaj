@@ -77,6 +77,20 @@ Skrypt:
 
 Pierwsze budowanie trwa kilka minut. Skrypt można bezpiecznie uruchomić ponownie.
 
+### Serwer z innymi usługami (port 80/443 zajęty)
+
+Jeśli na VPS działa już serwer WWW (nginx, Apache, Caddy, Traefik…), skrypt **nie rusza go**:
+
+- wbudowany Caddy nie jest uruchamiany, a Tutaj nasłuchuje tylko lokalnie na `127.0.0.1:<port>`
+  (pierwszy wolny z 3000, 3001, 3080, 8300–8302 – zapisany w `deploy/.env` jako `TUTAJ_HTTP_PORT`),
+- skrypt rozpoznaje serwer na porcie 80 i zapisuje gotową konfigurację w `deploy/proxy/rendered-…`
+  (szablony: [nginx](proxy/nginx.conf), [Apache](proxy/apache.conf), [Caddy](proxy/Caddyfile)),
+- na końcu wypisuje polecenia: skopiowanie konfiguracji, przeładowanie serwera i certyfikat (`certbot` lub automatycznie w Caddy).
+
+Ważne w konfiguracji proxy: przekazywanie WebSocket (`Upgrade`/`Connection`) i długi timeout (rozmowa trwa godzinę → połączenie
+sygnalizacji też). TURN (3478) i SFU (40000) i tak działają bezpośrednio, poza serwerem WWW – te porty muszą być wolne,
+skrypt sprawdza to przed startem i powie, który proces je zajmuje.
+
 ## 5. Sprawdzenie
 
 1. Otwórz `https://rozmowa.tutaj.eu.org` – powinna być kłódka (pierwsze wejście może potrwać kilkanaście sekund).
@@ -109,7 +123,9 @@ po restarcie wracają bez renegocjacji. Poprzednia wersja zostaje w `~/tutaj.old
 
 | Objaw | Przyczyna i rozwiązanie |
 |---|---|
-| Brak kłódki / błąd certyfikatu | Rekord A nie wskazuje na serwer albo port 80/443 zamknięty. `docker compose logs caddy` |
+| Brak kłódki / błąd certyfikatu | Rekord A nie wskazuje na serwer albo port 80/443 zamknięty. Z wbudowanym Caddy: `docker compose logs caddy`; z własnym serwerem WWW: sprawdź, czy `certbot` się powiódł |
+| 502 Bad Gateway z własnego nginx/Apache | Proxy wskazuje zły port – porównaj z `TUTAJ_HTTP_PORT` w `deploy/.env`; test: `curl http://127.0.0.1:<port>/api/health` |
+| Strona działa, ale „Nie można połączyć z serwerem sygnalizacji” | Proxy nie przepuszcza WebSocket – brak nagłówków `Upgrade`/`Connection` (nginx) lub `upgrade=websocket` (Apache) |
 | Strona działa, ale osoby z różnych sieci się nie widzą | TURN niedostępny: otwórz 3478 i 49160–49200/udp, sprawdź `docker compose logs coturn` |
 | Po przełączeniu na SFU brak obrazu i powrót do P2P | Port 40000 zamknięty u dostawcy lub `PUBLIC_IP` w `deploy/.env` jest błędny. `docker compose logs tutaj` |
 | `SFU disabled` w logach | Worker mediasoup nie wystartował (np. port 40000 zajęty). Szczegóły w logu |

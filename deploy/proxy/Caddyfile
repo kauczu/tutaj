@@ -1,0 +1,6 @@
+
+# Tutaj (install.sh fills in __DOMAIN__ and __PORT__). Caddy proxies WebSockets and gets HTTPS on its own.
+__DOMAIN__ {
+	encode gzip
+	reverse_proxy 127.0.0.1:__PORT__
+}

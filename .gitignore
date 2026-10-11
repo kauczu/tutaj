@@ -5,3 +5,4 @@ dist/
 certs/
 playwright-report/
 test-results/
+deploy/proxy/rendered-*

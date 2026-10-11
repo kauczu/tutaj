@@ -1,10 +1,11 @@
 # Production setup on a VPS with a public IPv4 and a domain:
 #   Tutaj (signaling + web client + SFU) behind Caddy (automatic HTTPS) + coturn (TURN relay).
 #
-#   ./install.sh <domain>   # first time: Docker, firewall rules, .env, start (see README.md)
+#   sudo ./install.sh <domain>   # Docker, ports, firewall rules, .env, start (see README.md)
 #   docker compose up -d --build
 #
-# Ports: 80, 443 (tcp) · 3478 (tcp+udp, TURN) · 40000 (tcp+udp, SFU) · 49160-49200 (udp, TURN relay).
+# Ports: 3478 (tcp+udp, TURN) · 40000 (tcp+udp, SFU) · 49160-49200 (udp, TURN relay)
+#        + 80, 443 (tcp) when the bundled Caddy is used.
 
 x-logging: &logging
   driver: json-file
@@ -15,8 +16,12 @@ services:
     build: ..
     restart: unless-stopped
     logging: *logging
-    # SFU media: a single port for UDP and TCP, announced under the public IP.
-    ports: ['40000:40000/udp', '40000:40000/tcp']
+    ports:
+      # SFU media: a single port for UDP and TCP, announced under the public IP.
+      - '40000:40000/udp'
+      - '40000:40000/tcp'
+      # HTTP for a reverse proxy on this host (bundled Caddy or an existing nginx/Apache) — never public.
+      - '127.0.0.1:${TUTAJ_HTTP_PORT:-3000}:3000'
     environment:
       SFU: 1
       SFU_PORT: 40000
@@ -27,7 +32,10 @@ services:
       TURN_SECRET: ${TURN_SECRET:?set TURN_SECRET in .env}
       MAX_PEERS: 4
 
+  # Only when ports 80/443 are free (COMPOSE_PROFILES=caddy in .env, set by install.sh).
+  # On a server that already runs a web server, that server proxies to 127.0.0.1:TUTAJ_HTTP_PORT instead.
   caddy:
+    profiles: [caddy]
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     logging: *logging
