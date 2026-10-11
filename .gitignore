@@ -3,3 +3,5 @@ dist/
 *.log
 .env
 certs/
+playwright-report/
+test-results/

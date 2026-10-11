@@ -5,7 +5,8 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/server/package.json packages/server/
 COPY packages/client/package.json packages/client/
 COPY packages/desktop/package.json packages/desktop/
-RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
+COPY packages/e2e/package.json packages/e2e/
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci
 COPY packages ./packages
 RUN npm run build && npm prune --omit=dev
 

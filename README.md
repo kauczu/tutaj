@@ -41,7 +41,22 @@ npm start            # http://localhost:3000 (tylko P2P)
 node packages/server/dist/index.js --sfu   # z SFU na porcie 40000 (udp+tcp)
 ```
 
-Testy (sygnalizacja, polityka trybu, SFU z prawdziwym workerem mediasoup): `npm test -w @tutaj/server`.
+### Testy
+
+```bash
+npm test             # serwer: sygnalizacja, polityka trybu, SFU z prawdziwym workerem mediasoup
+npm run build && npm run test:e2e   # end-to-end w Chromium (Playwright)
+```
+
+Testy end-to-end (`packages/e2e`) uruchamiają prawdziwy serwer i kilku uczestników w osobnych kontekstach Chromium
+z fałszywą kamerą i mikrofonem (`--use-fake-device-for-media-stream`). Sprawdzają m.in. wideo w obie strony, czat,
+przesłanie pliku (SHA-256), mesh 3 osób, przełączanie P2P ⇄ SFU, automatyczne przejście na SFU i powrót do P2P,
+oraz awarię serwera w trakcie rozmowy SFU. Drogę mediów weryfikują po statystykach `getStats()` każdego
+`RTCPeerConnection` (połączenie z SFU rozpoznają po `ice-lite` w SDP).
+Pierwsze uruchomienie wymaga przeglądarki: `npx playwright install chromium`.
+
+CI (`.github/workflows/ci.yml`): typecheck, build, testy serwera i E2E na Linuksie, testy serwera na Windowsie,
+budowanie i test dymny obrazu Dockera.
 
 ## Aplikacja desktopowa (host bez zewnętrznego serwera)
 
