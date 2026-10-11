@@ -1,46 +1,56 @@
-# Production setup on a VPS with a public IP and a domain:
-#   Tutaj (signaling + web client) behind Caddy (automatic HTTPS) + coturn (TURN relay).
+# Production setup on a VPS with a public IPv4 and a domain:
+#   Tutaj (signaling + web client + SFU) behind Caddy (automatic HTTPS) + coturn (TURN relay).
 #
-#   cp .env.example .env   # fill in DOMAIN, PUBLIC_IP, TURN_SECRET, SESSION_SECRET
-#   docker compose up -d
+#   ./install.sh <domain>   # first time: Docker, firewall rules, .env, start (see README.md)
+#   docker compose up -d --build
 #
-# Open firewall ports: 80, 443 (tcp), 3478 (tcp+udp), 5349 (tcp), 40000 (tcp+udp, SFU), 49160-49200 (udp).
+# Ports: 80, 443 (tcp) · 3478 (tcp+udp, TURN) · 40000 (tcp+udp, SFU) · 49160-49200 (udp, TURN relay).
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: 10m, max-file: '3' }
 
 services:
   tutaj:
     build: ..
     restart: unless-stopped
+    logging: *logging
     # SFU media: a single port for UDP and TCP, announced under the public IP.
-    ports: ["40000:40000/udp", "40000:40000/tcp"]
+    ports: ['40000:40000/udp', '40000:40000/tcp']
     environment:
       SFU: 1
       SFU_PORT: 40000
-      SFU_ANNOUNCED_ADDRESS: ${PUBLIC_IP}
-      PUBLIC_URL: https://${DOMAIN}
-      SESSION_SECRET: ${SESSION_SECRET}
-      TURN_URLS: turn:${DOMAIN}:3478?transport=udp,turn:${DOMAIN}:3478?transport=tcp,turns:${DOMAIN}:5349?transport=tcp
-      TURN_SECRET: ${TURN_SECRET}
+      SFU_ANNOUNCED_ADDRESS: ${PUBLIC_IP:?set PUBLIC_IP in .env}
+      PUBLIC_URL: https://${DOMAIN:?set DOMAIN in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      TURN_URLS: turn:${DOMAIN}:3478?transport=udp,turn:${DOMAIN}:3478?transport=tcp
+      TURN_SECRET: ${TURN_SECRET:?set TURN_SECRET in .env}
       MAX_PEERS: 4
 
   caddy:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
-    ports: ["80:80", "443:443"]
+    logging: *logging
+    ports: ['80:80', '443:443']
     environment:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [tutaj]
 
   coturn:
     image: coturn/coturn:4.7.0
     restart: unless-stopped
-    # TURN needs real UDP ports; host networking avoids NAT-ing a large port range through Docker.
+    logging: *logging
+    # TURN needs real UDP ports; host networking avoids NAT-ing a port range through Docker.
     network_mode: host
     command:
       - -n
       - --listening-port=3478
-      - --tls-listening-port=5349
+      - --no-tls
+      - --no-dtls
       - --min-port=49160
       - --max-port=49200
       - --external-ip=${PUBLIC_IP}
@@ -50,9 +60,16 @@ services:
       - --fingerprint
       - --no-cli
       - --no-multicast-peers
+      - --log-file=stdout
+      - --simple-log
+      # Never relay into this host's loopback or private networks.
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
       - --denied-peer-ip=10.0.0.0-10.255.255.255
       - --denied-peer-ip=172.16.0.0-172.31.255.255
       - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
 
 volumes:
   caddy-data:
+  caddy-config:

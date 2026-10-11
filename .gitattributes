@@ -1,0 +1,5 @@
+# Shell scripts and server configs must keep LF line endings (they run on Linux).
+*.sh text eol=lf
+Dockerfile text eol=lf
+deploy/* text eol=lf
+*.webp binary

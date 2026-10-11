@@ -80,15 +80,14 @@ Windows zapyta o zgodę zapory na połączenia przychodzące – trzeba ją dać
 
 ## Własny serwer (internet)
 
-`deploy/` zawiera gotowy zestaw: Tutaj + Caddy (automatyczny HTTPS) + coturn (TURN).
+`deploy/` zawiera gotowy zestaw: Tutaj + Caddy (automatyczny HTTPS) + coturn (TURN) oraz skrypt instalacyjny.
+Instrukcja krok po kroku (DNS, zapora, wgranie, instalacja, sprawdzenie, aktualizacja): **[deploy/README.md](deploy/README.md)**.
 
 ```bash
-cd deploy
-cp .env.example .env   # DOMAIN, PUBLIC_IP, TURN_SECRET, SESSION_SECRET
-docker compose up -d
+sudo bash deploy/install.sh rozmowa.tutaj.eu.org
 ```
 
-Porty: 80/443 tcp, 3478 tcp+udp, 5349 tcp, 40000 tcp+udp (SFU), 49160–49200 udp.
+Porty: 80/443 tcp, 3478 tcp+udp (TURN), 40000 tcp+udp (SFU), 49160–49200 udp (przekaźnik TURN).
 
 ### Zmienne środowiskowe serwera
 

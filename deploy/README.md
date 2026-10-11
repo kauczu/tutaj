@@ -1,0 +1,118 @@
+# Wdrożenie Tutaj na VPS
+
+Efekt: `https://<twoja-domena>` z aplikacją, SFU i serwerem TURN. Wszystko działa w Dockerze:
+
+| Usługa | Rola | Porty |
+|---|---|---|
+| `tutaj` | sygnalizacja, klient (PWA), SFU (mediasoup) | 40000 tcp+udp |
+| `caddy` | HTTPS z automatycznym certyfikatem Let's Encrypt | 80, 443 tcp |
+| `coturn` | TURN – przekaźnik dla sieci, w których P2P nie przejdzie | 3478 tcp+udp, 49160–49200 udp |
+
+Poniżej przykładowa domena `rozmowa.tutaj.eu.org` – podstaw własną subdomenę.
+
+## Wymagania
+
+- VPS z **publicznym IPv4** (bez współdzielonego adresu/CGNAT), Ubuntu 22.04+ lub Debian 12+, 1–2 vCPU, 2 GB RAM.
+- Dostęp SSH z uprawnieniami `sudo`.
+- Możliwość dodania rekordu DNS w strefie `tutaj.eu.org`.
+
+## 1. Rekord DNS
+
+U dostawcy DNS domeny `tutaj.eu.org` dodaj rekord:
+
+| Typ | Nazwa | Wartość | TTL |
+|---|---|---|---|
+| A | `rozmowa` | `<IP serwera>` | 300 |
+
+Jeśli DNS jest w **Cloudflare**, ustaw rekord jako **„DNS only” (szara chmurka)**. Proxy Cloudflare nie przepuszcza
+TURN ani SFU (UDP), a aplikacja łączy się z nimi pod tą samą nazwą.
+
+Sprawdź (z własnego komputera, po kilku minutach):
+
+```powershell
+nslookup rozmowa.tutaj.eu.org
+```
+
+## 2. Zapora u dostawcy VPS
+
+Jeśli dostawca ma zaporę w panelu (Hetzner Cloud Firewall, OVH, Oracle Security List, AWS Security Group…), otwórz:
+
+- `80/tcp`, `443/tcp`
+- `3478/tcp` i `3478/udp`
+- `40000/tcp` i `40000/udp`
+- `49160-49200/udp`
+
+Zaporę systemową (`ufw`) skrypt instalacyjny skonfiguruje sam.
+
+## 3. Wgranie projektu na serwer
+
+Repozytorium jest prywatne, więc najprościej przesłać paczkę z bieżącą wersją. Na swoim komputerze, w katalogu `tutaj`
+(PowerShell lub Git Bash):
+
+```powershell
+git archive --format=tar.gz -o tutaj.tar.gz HEAD
+scp tutaj.tar.gz uzytkownik@IP_SERWERA:~
+```
+
+`git archive` bierze zatwierdzony stan repozytorium (bez `node_modules`), więc niezatwierdzone zmiany nie trafią na serwer.
+
+## 4. Instalacja
+
+Na serwerze (`ssh uzytkownik@IP_SERWERA`):
+
+```bash
+mkdir -p ~/tutaj && tar -xzf ~/tutaj.tar.gz -C ~/tutaj
+cd ~/tutaj/deploy
+sudo bash install.sh rozmowa.tutaj.eu.org
+```
+
+Skrypt:
+
+1. ustala publiczny IP serwera (możesz go podać jako drugi argument),
+2. sprawdza, czy domena wskazuje na ten IP,
+3. instaluje Dockera z oficjalnego repozytorium (jeśli go nie ma),
+4. dodaje reguły `ufw` (nie włącza zapory, jeśli jest wyłączona – SSH zostaje dozwolony),
+5. tworzy `deploy/.env` z losowymi sekretami TURN i sesji (tylko przy pierwszym uruchomieniu),
+6. buduje i uruchamia kontenery, sprawdza aplikację i SFU.
+
+Pierwsze budowanie trwa kilka minut. Skrypt można bezpiecznie uruchomić ponownie.
+
+## 5. Sprawdzenie
+
+1. Otwórz `https://rozmowa.tutaj.eu.org` – powinna być kłódka (pierwsze wejście może potrwać kilkanaście sekund).
+2. Dołącz z komputera i z **telefonu na danych komórkowych** (wyłączone Wi-Fi) – to wymusza drogę przez internet.
+3. W **Ustawieniach** zobacz tabelę połączeń: „Trasa” = `P2P` albo `TURN` (gdy sieć wymaga przekaźnika).
+4. Z trzema osobami ustaw **Tryb mediów → SFU** – znaczek na pasku zmieni się na „SFU”, obraz ma działać dalej.
+
+Z serwera:
+
+```bash
+curl -s https://rozmowa.tutaj.eu.org/api/health      # {"ok":true,"rooms":…,"clients":…}
+cd ~/tutaj/deploy && docker compose logs -f          # logi wszystkich usług
+```
+
+## Aktualizacja
+
+Na komputerze: `git archive …` i `scp …` jak w kroku 3. Na serwerze:
+
+```bash
+rm -rf ~/tutaj.new && mkdir ~/tutaj.new && tar -xzf ~/tutaj.tar.gz -C ~/tutaj.new
+cp ~/tutaj/deploy/.env ~/tutaj.new/deploy/.env
+rm -rf ~/tutaj.old && mv ~/tutaj ~/tutaj.old && mv ~/tutaj.new ~/tutaj
+cd ~/tutaj/deploy && sudo docker compose up -d --build
+```
+
+`.env` przenosi się ze starej wersji – sekrety się nie zmieniają, a dzięki `SESSION_SECRET` trwające rozmowy
+po restarcie wracają bez renegocjacji. Poprzednia wersja zostaje w `~/tutaj.old` (cofnięcie: zamień katalogi i `up -d --build`).
+
+## Gdy coś nie działa
+
+| Objaw | Przyczyna i rozwiązanie |
+|---|---|
+| Brak kłódki / błąd certyfikatu | Rekord A nie wskazuje na serwer albo port 80/443 zamknięty. `docker compose logs caddy` |
+| Strona działa, ale osoby z różnych sieci się nie widzą | TURN niedostępny: otwórz 3478 i 49160–49200/udp, sprawdź `docker compose logs coturn` |
+| Po przełączeniu na SFU brak obrazu i powrót do P2P | Port 40000 zamknięty u dostawcy lub `PUBLIC_IP` w `deploy/.env` jest błędny. `docker compose logs tutaj` |
+| `SFU disabled` w logach | Worker mediasoup nie wystartował (np. port 40000 zajęty). Szczegóły w logu |
+| Serwer za NAT 1:1 (AWS, Oracle) | Podaj publiczny IP ręcznie: `sudo bash install.sh <domena> <publiczny-IP>` i przekieruj wszystkie porty |
+
+Sekrety są w `deploy/.env` (uprawnienia 600) – nie kopiuj go do repozytorium.
