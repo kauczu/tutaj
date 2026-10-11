@@ -102,9 +102,11 @@ fi
 
 conflicts=0
 for spec in t:3478 u:3478 t:40000 u:40000; do
-  owner="$(port_owner "${spec%%:*}" "${spec#*:}")"
+  proto="${spec%%:*}" port="${spec#*:}"
+  owner="$(port_owner "$proto" "$port")"
   if [[ -n "$owner" ]]; then
-    warn "Port ${spec#*:}/$([[ ${spec%%:*} == t ]] && echo tcp || echo udp) jest zajęty przez: $owner"
+    if [[ $proto == t ]]; then proto_name=tcp; else proto_name=udp; fi
+    warn "Port $port/$proto_name jest zajęty przez: $owner"
     conflicts=1
   fi
 done
@@ -141,7 +143,9 @@ if command -v ufw >/dev/null 2>&1; then
 else
   warn "Brak ufw — upewnij się, że porty są otwarte w zaporze systemu."
 fi
-warn "Jeśli dostawca VPS ma własną zaporę w panelu, otwórz tam: 3478/tcp+udp, 40000/tcp+udp, 49160-49200/udp$([[ $MODE == caddy ]] && echo ', 80/tcp, 443/tcp')."
+PANEL_PORTS="3478/tcp+udp, 40000/tcp+udp, 49160-49200/udp"
+if [[ $MODE == caddy ]]; then PANEL_PORTS+=", 80/tcp, 443/tcp"; fi
+warn "Jeśli dostawca VPS ma własną zaporę w panelu, otwórz tam: $PANEL_PORTS."
 
 # --- .env -------------------------------------------------------------------------
 say "Konfiguracja (.env)"
@@ -160,7 +164,7 @@ fi
 set_env DOMAIN "$DOMAIN"
 set_env PUBLIC_IP "$PUBLIC_IP"
 set_env TUTAJ_HTTP_PORT "$HTTP_PORT"
-set_env COMPOSE_PROFILES "$([[ $MODE == caddy ]] && echo caddy || true)"
+if [[ $MODE == caddy ]]; then set_env COMPOSE_PROFILES caddy; else set_env COMPOSE_PROFILES ""; fi
 
 # --- Start ------------------------------------------------------------------------
 say "Budowanie i uruchamianie (pierwszy raz kilka minut)"
