@@ -116,7 +116,7 @@ a { color: var(--accent-bright); }
 /* The author's logo: white ink with transparency, lit like the dawn on the horizon. */
 .brand-logo {
   height: 64px; width: auto; opacity: 0.92;
-  filter: drop-shadow(0 0 18px rgba(var(--atmo), 0.35)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 0 8px rgba(var(--atmo), 0.25)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 .brand p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
 
