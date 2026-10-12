@@ -13,7 +13,9 @@ import { fileURLToPath } from 'node:url';
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_SERVER = 'https://o.tutaj.eu.org';
+// The server this build is dedicated to. Someone hosting Tutaj under their own domain changes
+// "tutaj.defaultServer" in package.json (or users pick another server in the app).
+const DEFAULT_SERVER = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8')).tutaj?.defaultServer ?? 'https://o.tutaj.eu.org';
 const HTTP_PORT = Number(process.env.TUTAJ_PORT ?? 3000);
 const HTTPS_PORT = Number(process.env.TUTAJ_HTTPS_PORT ?? 3443);
 // TUTAJ_LAN=0 keeps the embedded server (lan mode) private to this machine.
@@ -153,11 +155,24 @@ function showOffline(reason) {
   void mainWindow.loadFile(OFFLINE_PAGE, { query: { server: settings.serverUrl, reason: reason ?? '' } });
 }
 
+function restart() {
+  app.relaunch();
+  app.exit(0);
+}
+
 /** Restart into the other mode (remembered for next launches). */
 function switchMode(mode) {
   saveSettings({ mode: mode === 'lan' ? 'lan' : 'remote' });
-  app.relaunch();
-  app.exit(0);
+  restart();
+}
+
+/** Use another Tutaj server (e.g. a self-hosted one); empty = back to this build's default. */
+function setServer(url) {
+  const value = typeof url === 'string' ? url.trim().replace(/\/+$/, '') : '';
+  if (value && !isAllowedServer(value)) return { ok: false, error: 'Adres musi zaczynać się od https://' };
+  saveSettings({ serverUrl: value || undefined, mode: 'remote' });
+  restart();
+  return { ok: true };
 }
 
 function registerIpc() {
@@ -166,9 +181,11 @@ function registerIpc() {
   ipcMain.handle('tutaj:info', guard(() => ({
     mode: settings.mode,
     serverUrl: settings.serverUrl,
+    defaultServer: DEFAULT_SERVER,
     lan: settings.mode === 'lan' && LAN && server ? { lanUrls: server.lanUrls, httpPort: server.httpPort } : null,
   })));
   ipcMain.handle('tutaj:switch-mode', guard((mode) => switchMode(mode)));
+  ipcMain.handle('tutaj:set-server', guard((url) => setServer(url)));
   ipcMain.handle('tutaj:retry', guard(() => mainWindow.loadURL(appUrl)));
 }
 

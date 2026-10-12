@@ -73,6 +73,8 @@ export type ClientMessage =
       password?: string;
       /** Rejoin under a previous identity (from `welcome`) so existing P2P connections survive a signaling outage. */
       resume?: { id: string; token: string };
+      /** Owner key (server's OWNER_KEY): lifts per-IP limits and extends TURN credentials. */
+      ownerKey?: string;
     }
   /** `sid` identifies the sender's RTCPeerConnection, so a fresh connection can be told apart from the old one. */
   | { type: 'signal'; to: string; sid: string; data: SignalData }
@@ -91,7 +93,8 @@ export type ErrorCode =
   | 'not-joined'
   | 'already-joined'
   | 'unknown-peer'
-  | 'rate-limited';
+  | 'rate-limited'
+  | 'room-limit';
 
 export type ServerMessage =
   | {
@@ -107,6 +110,8 @@ export type ServerMessage =
       mode: MediaMode;
       pref: ModePreference;
       sfuAvailable: boolean;
+      /** The server recognised the owner key or a trusted IP — no limits apply to this client. */
+      privileged: boolean;
     }
   /** Room media mode changed (or the preference did). `by` names who changed the preference. */
   | { type: 'mode'; mode: MediaMode; pref: ModePreference; reason: ModeReason; by?: string }

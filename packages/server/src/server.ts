@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ErrorCode, ModeReason, ServerMessage } from '@tutaj/shared';
 import { selfSignedCert, type TlsMaterial } from './cert.js';
+import { Guard, type GuardOptions } from './guard.js';
 import { DEFAULT_ICE, iceServersFor, type IceConfig } from './ice.js';
 import { lanAddresses } from './net.js';
 import { ModePolicy } from './policy.js';
@@ -17,6 +18,7 @@ import type { Sfu, SfuOptions } from './sfu.js';
 import { serveStatic } from './static.js';
 import { parseClientMessage } from './validate.js';
 
+export type { GuardOptions } from './guard.js';
 export type { IceConfig } from './ice.js';
 export type { SfuOptions } from './sfu.js';
 export { lanAddresses } from './net.js';
@@ -42,6 +44,8 @@ export interface ServerOptions {
   sessionSecret?: string;
   /** Enable the mediasoup SFU (used automatically when a mesh can't cope). Omit or `false` for P2P only. */
   sfu?: SfuOptions | false;
+  /** Abuse protection for a public server (Origin allowlist, per-IP limits, owner key). Off by default. */
+  guard?: GuardOptions;
   log?: (msg: string) => void;
 }
 
@@ -67,6 +71,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   const clientDir = options.clientDir === undefined ? defaultClientDir() : options.clientDir;
   const serveClient = clientDir !== null && existsSync(join(clientDir, 'index.html'));
   const rooms = new RoomRegistry(maxPeers);
+  const guard = new Guard(options.guard);
   const secret = options.sessionSecret || randomBytes(32);
   const resumeToken = (room: string, id: string) => createHmac('sha256', secret).update(`${room}:${id}`).digest('base64url');
   const validResume = (room: string, r: { id: string; token: string }) => {
@@ -154,6 +159,8 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const client: Client = { id: randomUUID(), name: '', ws, roomId: null };
+    const ip = guard.clientIp(req);
+    let privileged = false;
     let windowStart = Date.now();
     let count = 0;
     alive.add(ws);
@@ -166,6 +173,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       sfu?.closePeer(roomId, client.id);
       for (const other of remaining) send(other.ws, { type: 'peer-left', id: client.id, reason });
       if (remaining.length === 0) {
+        guard.roomClosed(roomId);
         policies.delete(roomId);
         sfu?.closeRoom(roomId);
         return;
@@ -191,16 +199,24 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
 
       if (msg.type === 'join') {
         if (client.roomId) return sendError(ws, 'already-joined', 'Już jesteś w pokoju');
+        privileged = guard.isOwnerKey(msg.ownerKey) || guard.isTrustedIp(ip);
+        if (!guard.allowJoin(ip, privileged)) {
+          return sendError(ws, 'rate-limited', 'Za dużo prób dołączenia — spróbuj ponownie za minutę');
+        }
         client.name = msg.name;
         if (msg.resume && validResume(msg.room, msg.resume)) {
           // Take over the previous identity; a stale socket still holding it is dropped silently.
           const stale = rooms.peer(msg.room, msg.resume.id);
           if (stale) {
-            rooms.leave(stale);
+            if (rooms.leave(stale)?.length === 0) guard.roomClosed(msg.room);
             sfu?.closePeer(msg.room, stale.id);
             stale.ws.terminate();
           }
           client.id = msg.resume.id;
+        }
+        const creating = !rooms.has(msg.room);
+        if (creating && !guard.canCreateRoom(ip, privileged)) {
+          return sendError(ws, 'room-limit', 'Masz już otwartą maksymalną liczbę pokoi — zamknij któryś albo dołącz do istniejącego');
         }
         const result = rooms.join(client, msg.room, msg.password);
         if (!result.ok) {
@@ -210,19 +226,21 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
             result.code === 'room-full' ? `Pokój jest pełny (max ${maxPeers} osoby)` : 'Nieprawidłowe hasło pokoju',
           );
         }
+        if (creating) guard.roomCreated(msg.room, ip, privileged);
         const policy = policyFor(msg.room);
         send(ws, {
           type: 'welcome',
           selfId: client.id,
           room: msg.room,
           peers: result.peers,
-          iceServers: iceServersFor(ice, client.id),
+          iceServers: iceServersFor(ice, client.id, privileged),
           maxPeers,
           shareBaseUrl: shareBaseUrl(req),
           resumeToken: resumeToken(msg.room, client.id),
           mode: policy.mode,
           pref: policy.pref,
           sfuAvailable: !!sfu,
+          privileged,
         });
         for (const other of rooms.others(client)) send(other.ws, { type: 'peer-joined', peer: peerInfo(client) });
         const d = policy.participantsChanged(result.peers.length + 1);
@@ -281,11 +299,15 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       }
     });
 
-    ws.on('close', () => leave('disconnect'));
+    ws.on('close', () => {
+      leave('disconnect');
+      guard.disconnect(ip);
+    });
     ws.on('error', () => ws.terminate());
   });
 
   const heartbeat = setInterval(() => {
+    guard.sweep();
     for (const ws of wss.clients) {
       if (!alive.has(ws)) {
         ws.terminate();
@@ -302,6 +324,12 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         socket.destroy();
         return;
       }
+      const reject = (status: string) => {
+        socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+      };
+      if (!guard.originAllowed(req)) return reject('403 Forbidden');
+      // Counted here, released when the socket closes (see 'close' above).
+      if (!guard.connect(guard.clientIp(req))) return reject('429 Too Many Requests');
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     });
   };

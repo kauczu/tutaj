@@ -31,6 +31,16 @@ services:
       TURN_URLS: turn:${DOMAIN}:3478?transport=udp,turn:${DOMAIN}:3478?transport=tcp
       TURN_SECRET: ${TURN_SECRET:?set TURN_SECRET in .env}
       MAX_PEERS: 4
+      # --- Abuse protection (see README) — the owner (OWNER_KEY / TRUSTED_IPS) is never limited.
+      TRUST_PROXY: 1 # real client IPs come from the reverse proxy's X-Forwarded-For
+      OWNER_KEY: ${OWNER_KEY:-}
+      TRUSTED_IPS: ${TRUSTED_IPS:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-} # default: https://${DOMAIN}
+      MAX_CONNECTIONS_PER_IP: ${MAX_CONNECTIONS_PER_IP:-20}
+      MAX_ROOMS_PER_IP: ${MAX_ROOMS_PER_IP:-5}
+      JOINS_PER_MINUTE: ${JOINS_PER_MINUTE:-30}
+      TURN_TTL: ${TURN_TTL:-14400} # 4 h
+      OWNER_TURN_TTL: ${OWNER_TURN_TTL:-86400} # 24 h
 
   # Only when ports 80/443 are free (COMPOSE_PROFILES=caddy in .env, set by install.sh).
   # On a server that already runs a web server, that server proxies to 127.0.0.1:TUTAJ_HTTP_PORT instead.
@@ -70,6 +80,11 @@ services:
       - --no-multicast-peers
       - --log-file=stdout
       - --simple-log
+      # Bandwidth and allocation limits (bytes/s). Far above what a 4-person call needs per session.
+      - --max-bps=${TURN_MAX_BPS:-625000} # per session, each direction (~5 Mbit/s)
+      - --bps-capacity=${TURN_BPS_CAPACITY:-0} # whole server; 0 = no cap
+      - --user-quota=${TURN_USER_QUOTA:-12} # allocations per credential (one per participant)
+      - --total-quota=${TURN_TOTAL_QUOTA:-300}
       # Never relay into this host's loopback or private networks.
       - --denied-peer-ip=0.0.0.0-0.255.255.255
       - --denied-peer-ip=127.0.0.0-127.255.255.255

@@ -1,8 +1,8 @@
 // Offline shell: network-first for pages, cache-first for hashed assets. Signaling is never cached.
-const CACHE = 'tutaj-v2';
+const CACHE = 'tutaj-v3';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/icon.svg', '/manifest.webmanifest', '/background.webp', '/background-mobile.webp'])));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/icon.svg', '/manifest.webmanifest', '/background.webp', '/background-mobile.webp', '/logo.webp'])));
   self.skipWaiting();
 });
 

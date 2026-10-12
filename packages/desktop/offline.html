@@ -2,7 +2,7 @@
 <html lang="pl">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src file: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
     <title>Tutaj — brak połączenia</title>
     <style>
       :root { color-scheme: dark; font-family: system-ui, 'Segoe UI', sans-serif; }
@@ -25,10 +25,21 @@
       .primary { background: linear-gradient(135deg, #63b6e6 0%, #3a82bd 55%, #295887 100%); font-weight: 650; }
       .ghost { background: rgba(16, 31, 72, 0.5); border: 1px solid rgba(108, 158, 202, 0.25); }
       .row { display: grid; gap: 10px; }
+      .logo { width: 200px; justify-self: center; opacity: 0.9; filter: drop-shadow(0 0 16px rgba(127, 200, 255, 0.3)); }
+      input {
+        font: inherit; color: #e8f1fa; background: rgba(2, 8, 22, 0.55); border: 1px solid rgba(108, 158, 202, 0.25);
+        border-radius: 12px; padding: 10px 12px;
+      }
+      details { color: #93aec9; font-size: 14px; }
+      details[open] { display: grid; gap: 8px; }
+      summary { cursor: pointer; }
+      .error { color: #ff9a9d; font-size: 13px; }
+      footer { text-align: center; font-size: 12px; color: #93aec9; }
     </style>
   </head>
   <body>
     <main class="card">
+      <img class="logo" src="logo.webp" alt="Tutaj.eu.org by Lorem Ipsum" />
       <h1>Brak połączenia</h1>
       <p>Nie mogę połączyć się z serwerem <strong id="server"></strong>. Sprawdź internet i spróbuj ponownie.</p>
       <p class="reason" id="reason"></p>
@@ -36,6 +47,13 @@
         <button class="primary" id="retry">Spróbuj ponownie</button>
         <button class="ghost" id="lan">Uruchom tryb lokalny (sieć LAN, bez internetu)</button>
       </div>
+      <details>
+        <summary>Zmień serwer</summary>
+        <input id="server-url" type="url" placeholder="https://twoja-domena.pl" aria-label="Adres serwera Tutaj" />
+        <button class="ghost" id="save-server">Zapisz i uruchom ponownie</button>
+        <p class="error" id="server-error" hidden></p>
+      </details>
+      <footer>© 2026 Lorem Ipsum · tutaj.eu.org</footer>
     </main>
     <script>
       const q = new URLSearchParams(location.search);
@@ -43,6 +61,16 @@
       document.getElementById('reason').textContent = q.get('reason') ? 'Szczegóły: ' + q.get('reason') : '';
       document.getElementById('retry').onclick = () => window.tutaj.retry();
       document.getElementById('lan').onclick = () => window.tutaj.switchMode('lan');
+      const urlInput = document.getElementById('server-url');
+      urlInput.value = q.get('server') || '';
+      document.getElementById('save-server').onclick = async () => {
+        const res = await window.tutaj.setServer(urlInput.value);
+        if (res && !res.ok) {
+          const err = document.getElementById('server-error');
+          err.textContent = res.error;
+          err.hidden = false;
+        }
+      };
       // Retry on its own when the connection comes back.
       window.addEventListener('online', () => window.tutaj.retry());
     </script>

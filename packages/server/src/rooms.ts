@@ -60,6 +60,10 @@ export class RoomRegistry {
     return [...room.clients.values()];
   }
 
+  has(roomId: string): boolean {
+    return this.rooms.has(roomId);
+  }
+
   peer(roomId: string, id: string): Client | undefined {
     return this.rooms.get(roomId)?.clients.get(id);
   }

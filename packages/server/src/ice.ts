@@ -11,20 +11,25 @@ export interface IceConfig {
   turnSecret?: string;
   /** Lifetime of generated TURN credentials, in seconds. */
   turnTtl: number;
+  /** Lifetime for the owner's credentials (long calls through TURN must not expire). */
+  ownerTurnTtl: number;
 }
 
 export const DEFAULT_ICE: IceConfig = {
   stunUrls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'],
   turnUrls: [],
-  turnTtl: 6 * 3600,
+  // Short enough to limit misuse of leaked credentials, long enough for ordinary calls.
+  turnTtl: 4 * 3600,
+  ownerTurnTtl: 24 * 3600,
 };
 
-export function iceServersFor(cfg: IceConfig, clientId: string): IceServer[] {
+export function iceServersFor(cfg: IceConfig, clientId: string, privileged = false): IceServer[] {
   const servers: IceServer[] = [];
   if (cfg.stunUrls.length) servers.push({ urls: cfg.stunUrls });
   if (cfg.turnUrls.length) {
     if (cfg.turnSecret) {
-      const username = `${Math.floor(Date.now() / 1000) + cfg.turnTtl}:${clientId}`;
+      const ttl = privileged ? cfg.ownerTurnTtl : cfg.turnTtl;
+      const username = `${Math.floor(Date.now() / 1000) + ttl}:${clientId}`;
       const credential = createHmac('sha1', cfg.turnSecret).update(username).digest('base64');
       servers.push({ urls: cfg.turnUrls, username, credential });
     } else if (cfg.turnUsername && cfg.turnCredential) {

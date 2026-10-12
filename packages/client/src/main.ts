@@ -1,5 +1,6 @@
 import './style.css';
 import { SpeakingDetector } from './audio';
+import { APP_VERSION, BRAND } from './brand';
 import { LocalMedia, describeMediaError } from './media';
 import { Room } from './room';
 import { signalingUrl } from './signaling';
@@ -11,12 +12,16 @@ interface DesktopInfo {
   /** remote: window onto the Tutaj server; lan: the app hosts calls on the local network. */
   mode: 'remote' | 'lan';
   serverUrl: string;
+  /** The server this build is dedicated to. */
+  defaultServer?: string;
   lan: { lanUrls: string[]; httpPort: number } | null;
 }
 interface DesktopBridge {
   isDesktop: true;
   info(): Promise<DesktopInfo | null>;
   switchMode(mode: 'remote' | 'lan'): Promise<void>;
+  /** Saves another server address (empty = default) and restarts the app. */
+  setServer?(url: string): Promise<{ ok: boolean; error?: string }>;
 }
 declare global {
   interface Window {
@@ -56,6 +61,7 @@ const nameInput = $<HTMLInputElement>('name');
 const roomInput = $<HTMLInputElement>('room');
 const passwordInput = $<HTMLInputElement>('password');
 const serverInput = $<HTMLInputElement>('server');
+const ownerKeyInput = $<HTMLInputElement>('owner-key');
 const audioSelect = $<HTMLSelectElement>('audio-input');
 const videoSelect = $<HTMLSelectElement>('video-input');
 const previewVideo = $<HTMLVideoElement>('preview-video');
@@ -93,6 +99,8 @@ async function initLobby(): Promise<void> {
   nameInput.value = store.get('name');
   roomInput.value = params.get('room') ?? randomRoom();
   serverInput.value = params.get('server') ?? store.get('server');
+  ownerKeyInput.value = store.get('ownerKey');
+  renderBranding();
   if (params.get('room')) joinBtn.textContent = `Dołącz do „${params.get('room')}”`;
 
   $('random-room').addEventListener('click', () => (roomInput.value = randomRoom()));
@@ -145,6 +153,96 @@ async function initLobby(): Promise<void> {
   await refreshDevices(); // labels are only available after permission is granted
 }
 
+function link(text: string, href: string): HTMLAnchorElement {
+  const a = document.createElement('a');
+  a.textContent = text;
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  return a;
+}
+
+/** Author, repository and licence: lobby footer and the "about" section in settings. */
+function renderBranding(): void {
+  $('tagline').textContent = BRAND.tagline;
+  const repoLabel = BRAND.repoUrl.replace(/^https:\/\//, '');
+  $('lobby-footer').replaceChildren(
+    `© ${BRAND.year} `,
+    link(BRAND.author, BRAND.authorUrl),
+    ' · ',
+    link('GitHub', BRAND.repoUrl),
+    ` · ${BRAND.license} · v${APP_VERSION}`,
+  );
+  const logo = document.createElement('img');
+  logo.src = '/logo.webp';
+  logo.alt = BRAND.logoAlt;
+  const p = (...parts: (string | Node)[]) => {
+    const el = document.createElement('p');
+    el.append(...parts);
+    return el;
+  };
+  $('about').replaceChildren(
+    logo,
+    p(`${BRAND.name} v${APP_VERSION} · © ${BRAND.year} `, link(BRAND.author, BRAND.authorUrl)),
+    p('Kod źródłowy: ', link(repoLabel, BRAND.repoUrl), ` (${BRAND.license})`),
+    p('Nazwa, logo i grafika: wszelkie prawa zastrzeżone.'),
+  );
+}
+
+/** "Change server" for the desktop app: e.g. someone running Tutaj on their own domain. */
+function serverChanger(bridge: DesktopBridge, info: DesktopInfo): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'server-changer';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'ghost host-switch';
+  toggle.textContent = 'Zmień serwer…';
+  const form = document.createElement('div');
+  form.className = 'server-form';
+  form.hidden = true;
+  const input = document.createElement('input');
+  input.type = 'url';
+  input.value = info.serverUrl;
+  input.placeholder = 'https://twoja-domena.pl';
+  input.setAttribute('aria-label', 'Adres serwera Tutaj');
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'primary';
+  save.textContent = 'Zapisz i uruchom ponownie';
+  const msg = document.createElement('p');
+  msg.className = 'error';
+  msg.hidden = true;
+  const apply = async (url: string) => {
+    const res = await bridge.setServer!(url);
+    if (!res.ok) {
+      msg.textContent = res.error ?? 'Nieprawidłowy adres';
+      msg.hidden = false;
+    }
+  };
+  save.onclick = () => void apply(input.value);
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void apply(input.value);
+    }
+  };
+  form.append(input, save, msg);
+  if (info.defaultServer && info.serverUrl !== info.defaultServer) {
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'ghost';
+    reset.textContent = `Przywróć ${new URL(info.defaultServer).host}`;
+    reset.onclick = () => void apply('');
+    form.append(reset);
+  }
+  toggle.onclick = () => {
+    form.hidden = !form.hidden;
+    if (!form.hidden) input.focus();
+  };
+  wrap.append(toggle, form);
+  return wrap;
+}
+
 /** Desktop app: show which mode it runs in and let the user switch (the app restarts). */
 async function showDesktopInfo(): Promise<void> {
   const bridge = window.tutaj;
@@ -164,6 +262,7 @@ async function showDesktopInfo(): Promise<void> {
     box.append(title, document.createElement('br'), 'Bez internetu możesz poprowadzić rozmowę w sieci lokalnej — ta aplikacja stanie się jej serwerem.');
     switchBtn.textContent = 'Przełącz na tryb lokalny (sieć LAN)';
     switchBtn.onclick = () => void bridge.switchMode('lan');
+    if (bridge.setServer) box.append(serverChanger(bridge, info));
     // The app is dedicated to its server; a custom signaling server makes no sense here.
     $('server').closest('label')?.setAttribute('hidden', '');
   } else {
@@ -197,6 +296,7 @@ async function join(): Promise<void> {
   }
   store.set('name', name);
   store.set('server', serverInput.value.trim());
+  store.set('ownerKey', ownerKeyInput.value.trim());
 
   joinBtn.disabled = true;
   joinBtn.textContent = 'Łączenie…';
@@ -204,7 +304,14 @@ async function join(): Promise<void> {
     detector?.destroy();
     detector = null;
     await Room.join(
-      { roomId, name, password: passwordInput.value || undefined, signalingUrl: url, media },
+      {
+        roomId,
+        name,
+        password: passwordInput.value || undefined,
+        ownerKey: ownerKeyInput.value.trim() || undefined,
+        signalingUrl: url,
+        media,
+      },
       () => {
         // Back to the lobby with the room prefilled; a reload releases everything cleanly.
         location.reload();

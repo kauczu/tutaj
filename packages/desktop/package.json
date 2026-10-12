@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Tutaj — wideorozmowy dla 2–4 osób. Aplikacja z wbudowanym serwerem (host w sieci LAN).",
-  "author": "kauczu <kauczu@gmail.com>",
-  "license": "MIT",
+  "author": "Lorem Ipsum (https://tutaj.eu.org)",
+  "license": "AGPL-3.0-only",
   "main": "main.mjs",
   "scripts": {
     "start": "electron .",
@@ -21,7 +21,7 @@
   "build": {
     "appId": "org.eu.tutaj.desktop",
     "productName": "Tutaj",
-    "copyright": "© 2026 kauczu",
+    "copyright": "© 2026 Lorem Ipsum",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -32,6 +32,7 @@
       "picker-preload.cjs",
       "picker.html",
       "offline.html",
+      "logo.webp",
       "package.json"
     ],
     "extraResources": [
@@ -57,8 +58,16 @@
       "shortcutName": "Tutaj",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "uninstallDisplayName": "Tutaj",
+      "uninstallDisplayName": "Tutaj (Lorem Ipsum)",
       "language": "1045"
     }
+  },
+  "homepage": "https://github.com/kauczu/tutaj",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kauczu/tutaj.git"
+  },
+  "tutaj": {
+    "defaultServer": "https://o.tutaj.eu.org"
   }
 }

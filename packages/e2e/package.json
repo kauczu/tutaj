@@ -14,5 +14,12 @@
     "@tutaj/server": "0.1.0",
     "@types/node": "22.20.4",
     "ws": "8.21.3"
+  },
+  "license": "AGPL-3.0-only",
+  "author": "Lorem Ipsum (https://tutaj.eu.org)",
+  "homepage": "https://github.com/kauczu/tutaj",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kauczu/tutaj.git"
   }
 }

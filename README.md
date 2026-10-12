@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="brand/social-preview.jpg" alt="Tutaj.eu.org by Lorem Ipsum" width="720" />
+</p>
+
+<p align="center">
+  <b>Wideorozmowy dla 2–4 osób — spotkajmy się tutaj.</b><br />
+  <a href="https://o.tutaj.eu.org">o.tutaj.eu.org</a> · autor: <a href="https://tutaj.eu.org">Lorem Ipsum</a> · licencja kodu: <a href="LICENSE">AGPL-3.0</a>
+</p>
+
+> **Wersja wczesna (alpha).** Działa i jest testowana, ale interfejsy i konfiguracja mogą się jeszcze zmieniać.
+
 # Tutaj
 
 Wideorozmowy WebRTC dla 2–4 osób, inspirowane funkcjami [MiroTalk](https://github.com/miroslavpejic85/mirotalk).
@@ -80,6 +91,10 @@ pod którymi inni w tej samej sieci mogą dołączyć:
 
 Windows zapyta o zgodę zapory na połączenia przychodzące – trzeba ją dać dla sieci prywatnych.
 
+**Inny serwer** – aplikacja nie jest przywiązana do `o.tutaj.eu.org`: w lobby (tryb serwera) jest „Zmień serwer…”,
+a na ekranie „Brak połączenia” – „Zmień serwer”. Kto buduje własny instalator dla swojej domeny, ustawia
+`tutaj.defaultServer` w `packages/desktop/package.json`.
+
 Zmienne (dla zaawansowanych i testów): `TUTAJ_MODE` (`remote`/`lan`), `TUTAJ_SERVER_URL` (domyślnie `https://o.tutaj.eu.org`),
 `TUTAJ_USER_DATA` (osobny profil), w trybie lokalnym `TUTAJ_PORT` (3000), `TUTAJ_HTTPS_PORT` (3443),
 `TUTAJ_LAN=0` (tylko ta maszyna), `TUTAJ_SFU=0` (bez SFU), `TUTAJ_SFU_PORT` (40000).
@@ -128,6 +143,25 @@ Porty: 80/443 tcp, 3478 tcp+udp (TURN), 40000 tcp+udp (SFU), 49160–49200 udp (
 | `TURN_USERNAME` / `TURN_CREDENTIAL` | – | alternatywnie stałe poświadczenia |
 | `SESSION_SECRET` | losowy | podpis tokenów wznowienia sesji; ustaw, by rozmowy przeżywały restart serwera bez renegocjacji |
 | `CLIENT_DIR` | `packages/client/dist` | katalog z klientem |
+| `OWNER_KEY` | – | klucz właściciela: zdejmuje limity, dłuższe poświadczenia TURN (zob. niżej) |
+| `TRUSTED_IPS` | – | adresy/podsieci IPv4 bez limitów, np. `203.0.113.7,198.51.100.0/24` |
+| `ALLOWED_ORIGINS` | origin z `PUBLIC_URL` | strony, które mogą łączyć się z sygnalizacją; `*` wyłącza kontrolę |
+| `TRUST_PROXY` | – | `1` = prawdziwe IP klienta z `X-Forwarded-For` (za reverse proxy) |
+| `LIMITS` | włączone przy `NODE_ENV=production` | `0` wyłącza limity na IP |
+| `MAX_CONNECTIONS_PER_IP` / `MAX_ROOMS_PER_IP` / `JOINS_PER_MINUTE` | 20 / 5 / 30 | limity na adres IP |
+| `TURN_TTL` / `OWNER_TURN_TTL` | 14400 / 86400 s | ważność poświadczeń TURN (zwykli użytkownicy / właściciel) |
+
+### Ochrona serwera publicznego
+
+Publiczny serwer z darmowym TURN i SFU łatwo nadużyć. Domyślnie (w obrazie Dockera) działają więc:
+
+- **lista dozwolonych originów** – sygnalizacji nie użyje cudza strona,
+- **limity na adres IP** – połączenia, otwarte pokoje, dołączenia na minutę,
+- **krótko ważne poświadczenia TURN** (4 h) oraz **limity coturn** – przepustowość na sesję, liczba alokacji.
+
+**Właściciel nie jest ograniczany.** Instalator generuje `OWNER_KEY` i wypisuje go na koniec. Wpisany w lobby
+(„Urządzenia i ustawienia zaawansowane” → „Klucz właściciela”) zdejmuje limity pokoi i dołączeń i daje poświadczenia
+TURN ważne 24 h. Pełne zwolnienie, także z limitu połączeń, zapewnia `TRUSTED_IPS` (np. stały adres domowy).
 | `SFU` (lub flaga `--sfu`) | wyłączone | włącza SFU (mediasoup) |
 | `SFU_PORT` | `40000` | jeden port UDP+TCP dla wszystkich mediów SFU |
 | `SFU_ANNOUNCED_ADDRESS` | pierwszy adres LAN | publiczny IP/host, pod którym klienci łączą się z SFU (za NAT/Dockerem) |
@@ -181,11 +215,17 @@ Moduł `mediasoup-client` jest ładowany leniwie – pobiera się dopiero, gdy p
 
 ## Wygląd
 
-Motyw opiera się na obrazie [welcome-background1.png](https://jest.tutaj.eu.org/images/welcome-background1.png)
-(Ziemia o świcie i Księżyc): granat kosmosu jako tło, błękit atmosfery (`#4d9aca`) jako akcent, poświata horyzontu
-(`#a8c4d8`) na wyróżnieniach, szklane panele nad sceną. Obraz jest dołączony do aplikacji jako WebP
-(`packages/client/public/background.webp` 1920 px i `background-mobile.webp` 1080 px), więc działa też offline.
+Motyw opiera się na grafice autora (Ziemia o świcie i Księżyc, `brand/background.jpg`): granat kosmosu jako tło,
+błękit atmosfery (`#4d9aca`) jako akcent, poświata horyzontu (`#a8c4d8`) na wyróżnieniach, szklane panele nad sceną
+i logo „Tutaj.eu.org by Lorem Ipsum”. Grafika jest dołączona do aplikacji jako WebP
+(`packages/client/public/background.webp` 1920 px, `background-mobile.webp` 1080 px), więc działa też offline.
 Kolory są zmiennymi CSS na początku `packages/client/src/style.css`.
+
+## Licencja i marka
+
+Kod: © 2026 Lorem Ipsum, [AGPL-3.0](LICENSE). Nazwa „Tutaj”, pseudonim „Lorem Ipsum”, logo, ikony i grafika tła
+**nie są objęte licencją kodu** – wszelkie prawa zastrzeżone. Własna instancja lub fork musi mieć własną markę;
+co dokładnie zmienić, opisuje [NOTICE.md](NOTICE.md).
 
 ## Ograniczenia
 

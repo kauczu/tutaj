@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('tutaj', {
   info: () => ipcRenderer.invoke('tutaj:info'),
   /** Restarts the app in the given mode ('remote' or 'lan'). */
   switchMode: (mode) => ipcRenderer.invoke('tutaj:switch-mode', mode),
+  /** Switches to another Tutaj server (https://…); empty string = the build's default. Restarts the app. */
+  setServer: (url) => ipcRenderer.invoke('tutaj:set-server', url),
   /** Reloads the server page (offline screen). */
   retry: () => ipcRenderer.invoke('tutaj:retry'),
 });

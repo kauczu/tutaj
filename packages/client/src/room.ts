@@ -17,6 +17,8 @@ export interface RoomOptions {
   roomId: string;
   name: string;
   password?: string;
+  /** Server owner's key: lifts the server's per-IP limits. */
+  ownerKey?: string;
   signalingUrl: string;
   media: LocalMedia;
 }
@@ -67,10 +69,17 @@ async function connectAndJoin(
       } else if (msg.type === 'error') {
         clearTimeout(timer);
         off();
-        reject(new JoinError(msg.message, msg.code === 'bad-password' || msg.code === 'room-full'));
+        reject(new JoinError(msg.message, ['bad-password', 'room-full', 'room-limit'].includes(msg.code)));
       }
     });
-    signaling.send({ type: 'join', room: opts.roomId, name: opts.name, password: opts.password, resume });
+    signaling.send({
+      type: 'join',
+      room: opts.roomId,
+      name: opts.name,
+      password: opts.password,
+      resume,
+      ownerKey: opts.ownerKey,
+    });
   }).catch((err) => {
     signaling.close();
     throw err;
@@ -187,6 +196,7 @@ export class Room {
     }
     this.relayState();
     void this.applyMode(welcome.mode);
+    if (firstJoin && welcome.privileged) toast('Rozpoznano klucz właściciela — limity serwera Cię nie dotyczą.');
     if (welcome.peers.length === 0 && firstJoin) {
       this.chat.addSystem('Jesteś pierwszy w pokoju — skopiuj zaproszenie i wyślij je innym.');
     }

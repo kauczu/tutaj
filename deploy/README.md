@@ -91,6 +91,35 @@ Ważne w konfiguracji proxy: przekazywanie WebSocket (`Upgrade`/`Connection`) i 
 sygnalizacji też). TURN (3478) i SFU (40000) i tak działają bezpośrednio, poza serwerem WWW – te porty muszą być wolne,
 skrypt sprawdza to przed startem i powie, który proces je zajmuje.
 
+### Klucz właściciela i limity
+
+Na koniec instalacji skrypt wypisuje **klucz właściciela** (`OWNER_KEY` w `deploy/.env`). Wpisz go w aplikacji:
+lobby → „Urządzenia i ustawienia zaawansowane” → „Klucz właściciela”. Po dołączeniu zobaczysz komunikat
+„Rozpoznano klucz właściciela” – limity serwera Cię wtedy nie dotyczą.
+
+Domyślne limity dla pozostałych (zmienisz je w `deploy/.env`, potem `sudo docker compose up -d`):
+
+| Zmienna | Domyślnie | Co ogranicza |
+|---|---|---|
+| `MAX_CONNECTIONS_PER_IP` | 20 | jednoczesne połączenia z jednego IP |
+| `MAX_ROOMS_PER_IP` | 5 | pokoje otwarte jednocześnie przez jedno IP |
+| `JOINS_PER_MINUTE` | 30 | próby dołączenia na minutę z jednego IP |
+| `TURN_TTL` / `OWNER_TURN_TTL` | 14400 / 86400 | ważność poświadczeń TURN w sekundach |
+| `TURN_MAX_BPS` | 625000 | przepustowość jednej sesji TURN, bajty/s w każdą stronę (~5 Mbit/s) |
+| `TURN_BPS_CAPACITY` | 0 | łączna przepustowość TURN serwera, bajty/s (0 = bez limitu) |
+| `TURN_USER_QUOTA` / `TURN_TOTAL_QUOTA` | 12 / 300 | alokacje TURN na uczestnika / łącznie |
+| `TRUSTED_IPS` | – | adresy bez żadnych limitów, np. stały adres domowy |
+| `ALLOWED_ORIGINS` | `https://<domena>` | strony, z których wolno łączyć się z sygnalizacją |
+
+Limity coturn są ustawione daleko powyżej potrzeb rozmowy 4 osób – chronią przed użyciem serwera jako darmowego
+przekaźnika, a nie ograniczają zwykłych rozmów.
+
+### Własna domena
+
+Domena pochodzi wyłącznie z argumentu `install.sh` (i `deploy/.env`) – nic nie jest przypięte do `o.tutaj.eu.org`.
+Aplikacja desktopowa łączy się z innym serwerem przez „Zmień serwer…” w lobby. Publiczna instancja pod własną
+nazwą powinna też mieć własną markę – zob. [NOTICE.md](../NOTICE.md).
+
 ## 5. Sprawdzenie
 
 1. Otwórz `https://rozmowa.tutaj.eu.org` – powinna być kłódka (pierwsze wejście może potrwać kilkanaście sekund).

@@ -29,8 +29,29 @@ const options: ServerOptions = {
     turnCredential: env.TURN_CREDENTIAL,
     turnSecret: env.TURN_SECRET,
     ...(int(env.TURN_TTL) && { turnTtl: int(env.TURN_TTL) }),
+    ...(int(env.OWNER_TURN_TTL) && { ownerTurnTtl: int(env.OWNER_TURN_TTL) }),
   },
+  guard: guardOptions(),
 };
+
+/**
+ * Abuse protection. Per-IP limits are on by default in production (NODE_ENV=production, as in the
+ * Docker image) and can be tuned or switched off (LIMITS=0). The owner (OWNER_KEY / TRUSTED_IPS) is exempt.
+ */
+function guardOptions(): ServerOptions['guard'] {
+  const limits = env.LIMITS ? env.LIMITS !== '0' : env.NODE_ENV === 'production';
+  // Default allowlist: the server's own public origin. "*" disables the check.
+  const origins = list(env.ALLOWED_ORIGINS) ?? (env.PUBLIC_URL ? [new URL(env.PUBLIC_URL).origin] : undefined);
+  return {
+    allowedOrigins: origins?.includes('*') ? undefined : origins?.map((o) => o.replace(/\/+$/, '')),
+    trustProxy: env.TRUST_PROXY === '1' || env.TRUST_PROXY === 'true',
+    trustedIps: list(env.TRUSTED_IPS),
+    ownerKey: env.OWNER_KEY || undefined,
+    maxConnectionsPerIp: limits ? (int(env.MAX_CONNECTIONS_PER_IP) ?? 20) : undefined,
+    maxRoomsPerIp: limits ? (int(env.MAX_ROOMS_PER_IP) ?? 5) : undefined,
+    joinsPerMinute: limits ? (int(env.JOINS_PER_MINUTE) ?? 30) : undefined,
+  };
+}
 
 const server = await startServer(options);
 

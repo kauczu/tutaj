@@ -35,5 +35,12 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "license": "AGPL-3.0-only",
+  "author": "Lorem Ipsum (https://tutaj.eu.org)",
+  "homepage": "https://github.com/kauczu/tutaj",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kauczu/tutaj.git"
+  }
 }

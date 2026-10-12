@@ -71,7 +71,15 @@ export function parseClientMessage(raw: string): ClientMessage | null {
         if (!isObject(r) || !isString(r.id, 64) || !isString(r.token, 128)) return null;
         resume = { id: r.id, token: r.token };
       }
-      return { type: 'join', room, name, password: (msg.password as string | undefined) || undefined, resume };
+      if (msg.ownerKey !== undefined && !isString(msg.ownerKey, 256)) return null;
+      return {
+        type: 'join',
+        room,
+        name,
+        password: (msg.password as string | undefined) || undefined,
+        resume,
+        ownerKey: (msg.ownerKey as string | undefined) || undefined,
+      };
     }
     case 'signal': {
       if (!isString(msg.to, 64) || !isString(msg.sid, 64)) return null;

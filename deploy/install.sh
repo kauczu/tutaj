@@ -27,6 +27,17 @@ port_owner() {
   { ss -"$1"lnp "sport = :$2" 2>/dev/null || true; } | grep -o 'users:(("[^"]*' | cut -d'"' -f2 | sort -u | paste -sd, - || true
 }
 
+# How the owner lifts the server's limits for themselves.
+owner_hint() {
+  cat <<EOT
+
+Klucz właściciela (zdejmuje z Ciebie limity serwera, trzymaj go w tajemnicy):
+  $OWNER_KEY
+Wpisz go w aplikacji: lobby → „Urządzenia i ustawienia zaawansowane” → „Klucz właściciela”.
+Później odczytasz go poleceniem: sudo grep OWNER_KEY $ENV_FILE
+EOT
+}
+
 # Set KEY=VALUE in .env, keeping everything else.
 set_env() {
   if grep -q "^$1=" "$ENV_FILE"; then sed -i "s|^$1=.*|$1=$2|" "$ENV_FILE"; else echo "$1=$2" >> "$ENV_FILE"; fi
@@ -161,6 +172,14 @@ EOF
 else
   echo "Zostawiam sekrety z istniejącego $ENV_FILE."
 fi
+# Secrets added in later versions are generated once if missing.
+for key in TURN_SECRET SESSION_SECRET OWNER_KEY; do
+  if ! grep -q "^$key=." "$ENV_FILE"; then
+    set_env "$key" "$(openssl rand -hex 32)"
+    echo "Dodano brakujący sekret: $key"
+  fi
+done
+OWNER_KEY="$(grep -oP '^OWNER_KEY=\K.*' "$ENV_FILE")"
 set_env DOMAIN "$DOMAIN"
 set_env PUBLIC_IP "$PUBLIC_IP"
 set_env TUTAJ_HTTP_PORT "$HTTP_PORT"
@@ -188,6 +207,7 @@ if [[ $MODE == caddy ]]; then
   cat <<EOF
 
 Gotowe. Otwórz:  https://$DOMAIN
+$(owner_hint)
 Pierwsze wejście może potrwać kilkanaście sekund — Caddy pobiera wtedy certyfikat Let's Encrypt.
 Logi:            cd $DIR && docker compose logs -f
 EOF
@@ -253,6 +273,8 @@ EOF
 esac
 
 cat <<EOF
+
+$(owner_hint)
 
 Sprawdzenie lokalne (już teraz):  curl http://127.0.0.1:$HTTP_PORT/api/health
 Po skonfigurowaniu proxy otwórz:  https://$DOMAIN
