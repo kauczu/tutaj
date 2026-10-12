@@ -33,7 +33,7 @@ owner_hint() {
 
 Klucz właściciela (zdejmuje z Ciebie limity serwera, trzymaj go w tajemnicy):
   $OWNER_KEY
-Wpisz go w aplikacji: lobby → „Urządzenia i ustawienia zaawansowane” → „Klucz właściciela”.
+Wpisz go w aplikacji: lobby → "Urządzenia i ustawienia zaawansowane" → "Klucz właściciela".
 Później odczytasz go poleceniem: sudo grep OWNER_KEY $ENV_FILE
 EOT
 }
