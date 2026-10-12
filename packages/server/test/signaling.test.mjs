@@ -149,3 +149,12 @@ test('session resume keeps the identity, even while the stale socket lingers', a
   assert.notEqual(wc.selfId, a.msg.selfId);
   [a.c, b2, c].forEach((x) => x.close());
 });
+
+test('/api/info identifies a Tutaj server (checked by the desktop app before switching servers)', async () => {
+  const res = await fetch(url.replace(/^ws/, 'http').replace(/\/ws$/, '/api/info'));
+  assert.equal(res.status, 200);
+  const info = await res.json();
+  assert.equal(info.app, 'tutaj');
+  assert.match(info.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(info.protocol, 1);
+});

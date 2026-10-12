@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, net, session, shell } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +42,54 @@ function isAllowedServer(url) {
     return u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(u.hostname));
   } catch {
     return false;
+  }
+}
+
+/** "wp.pl" → "https://wp.pl"; a full URL → its origin (Tutaj lives at the root). null = not a URL. */
+function normalizeServer(input) {
+  let value = typeof input === 'string' ? input.trim() : '';
+  if (!value) return '';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) value = `https://${value}`;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+const VERIFY_TIMEOUT_MS = 8000;
+
+/**
+ * Confirms that `url` hosts a Tutaj server before the app trusts it with the bridge, camera and
+ * microphone. Checks /api/info (Tutaj ≥ 0.2) and falls back to /api/health (older servers).
+ */
+async function verifyServer(url) {
+  const getJson = async (path) => {
+    const res = await net.fetch(new URL(path, `${url}/`).toString(), {
+      redirect: 'manual', // a redirect elsewhere means it is not a Tutaj endpoint
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+      cache: 'no-store',
+    });
+    if (res.status !== 200) return null;
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
+  try {
+    const info = await getJson('api/info');
+    if (info?.app === 'tutaj') return { ok: true };
+    const health = await getJson('api/health');
+    if (health?.ok === true && typeof health.rooms === 'number' && typeof health.clients === 'number') return { ok: true };
+    return { ok: false, unreachable: false };
+  } catch (err) {
+    // A redirect (common on ordinary websites) also lands here: if the address answers at all,
+    // it is reachable — just not a Tutaj server.
+    const answers = await net
+      .fetch(`${url}/`, { signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS), cache: 'no-store' })
+      .then(() => true, () => false);
+    return answers ? { ok: false, unreachable: false } : { ok: false, unreachable: true, detail: err?.message ?? String(err) };
   }
 }
 
@@ -147,12 +195,39 @@ const originOf = (url) => {
     return '';
   }
 };
-const OFFLINE_PAGE = join(here, 'offline.html');
-/** The app's own pages: the Tutaj origin, or the bundled offline page. */
-const isAppPage = (url) => originOf(url) === appOrigin || url.startsWith('file:');
+const SERVER_PAGE = join(here, 'offline.html');
+/** The app's own pages: the verified Tutaj origin, or the bundled server page. */
+const isAppPage = (url) => (appOrigin !== '' && originOf(url) === appOrigin) || url.startsWith('file:');
+const hostOf = (url) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+};
 
-function showOffline(reason) {
-  void mainWindow.loadFile(OFFLINE_PAGE, { query: { server: settings.serverUrl, reason: reason ?? '' } });
+/**
+ * The bundled page for choosing a server. kind: "unreachable" (offline/server down),
+ * "foreign" (the address is not a Tutaj server), "choose" (opened from the menu).
+ */
+function showServerPage(kind, reason) {
+  void mainWindow.loadFile(SERVER_PAGE, {
+    query: { kind, server: settings.serverUrl, default: DEFAULT_SERVER, mode: settings.mode, reason: reason ?? '' },
+  });
+}
+
+/** Opens the server — only after confirming it really is a Tutaj server. */
+async function openServer() {
+  if (settings.mode === 'remote') {
+    const check = await verifyServer(settings.serverUrl);
+    if (!check.ok) {
+      appOrigin = ''; // nothing is trusted until a Tutaj server is confirmed
+      showServerPage(check.unreachable ? 'unreachable' : 'foreign', check.detail);
+      return;
+    }
+  }
+  appOrigin = originOf(appUrl);
+  await mainWindow.loadURL(appUrl).catch(() => {}); // failures are handled by did-fail-load
 }
 
 function restart() {
@@ -166,13 +241,62 @@ function switchMode(mode) {
   restart();
 }
 
-/** Use another Tutaj server (e.g. a self-hosted one); empty = back to this build's default. */
-function setServer(url) {
-  const value = typeof url === 'string' ? url.trim().replace(/\/+$/, '') : '';
-  if (value && !isAllowedServer(value)) return { ok: false, error: 'Adres musi zaczynać się od https://' };
-  saveSettings({ serverUrl: value || undefined, mode: 'remote' });
-  restart();
+/**
+ * Use another Tutaj server (e.g. a self-hosted one); empty = back to this build's default.
+ * The address is saved only if a Tutaj server answers there.
+ */
+async function setServer(input) {
+  const url = normalizeServer(input);
+  if (url === null) return { ok: false, error: 'To nie jest prawidłowy adres.' };
+  const isDefault = !url || url === originOf(DEFAULT_SERVER);
+  if (!isDefault) {
+    if (!isAllowedServer(url)) return { ok: false, error: 'Adres musi zaczynać się od https://' };
+    const check = await verifyServer(url);
+    if (!check.ok) {
+      return {
+        ok: false,
+        error: check.unreachable
+          ? `Nie udało się połączyć z ${hostOf(url)}. Sprawdź adres i połączenie z internetem.`
+          : `Pod adresem ${hostOf(url)} nie działa serwer Tutaj — nic nie zmieniono.`,
+      };
+    }
+  }
+  saveSettings({ serverUrl: isDefault ? undefined : url, mode: 'remote' });
+  setTimeout(restart, 100); // let the reply reach the page first
   return { ok: true };
+}
+
+/** Application menu (Alt shows it): a way back that works whatever the window shows. */
+function buildMenu() {
+  const lan = settings.mode === 'lan';
+  const onDefault = !lan && originOf(settings.serverUrl) === originOf(DEFAULT_SERVER);
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: 'Tutaj',
+        submenu: [
+          { label: 'Wybierz serwer…', click: () => showServerPage('choose') },
+          { label: `Przywróć serwer domyślny (${hostOf(DEFAULT_SERVER)})`, enabled: !onDefault, click: () => void setServer('') },
+          lan
+            ? { label: `Tryb serwera (${hostOf(settings.serverUrl)})`, click: () => switchMode('remote') }
+            : { label: 'Tryb lokalny (sieć LAN)', click: () => switchMode('lan') },
+          { type: 'separator' },
+          { role: 'quit', label: 'Zamknij' },
+        ],
+      },
+      {
+        label: 'Widok',
+        submenu: [
+          { role: 'reload', label: 'Odśwież' },
+          { role: 'togglefullscreen', label: 'Pełny ekran' },
+          { type: 'separator' },
+          { role: 'zoomIn', label: 'Powiększ' },
+          { role: 'zoomOut', label: 'Pomniejsz' },
+          { role: 'resetZoom', label: 'Rzeczywisty rozmiar' },
+        ],
+      },
+    ]),
+  );
 }
 
 function registerIpc() {
@@ -186,7 +310,7 @@ function registerIpc() {
   })));
   ipcMain.handle('tutaj:switch-mode', guard((mode) => switchMode(mode)));
   ipcMain.handle('tutaj:set-server', guard((url) => setServer(url)));
-  ipcMain.handle('tutaj:retry', guard(() => mainWindow.loadURL(appUrl)));
+  ipcMain.handle('tutaj:retry', guard(() => openServer()));
 }
 
 async function createWindow() {
@@ -219,17 +343,22 @@ async function createWindow() {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
-  mainWindow.webContents.on('will-navigate', (e, url) => {
-    if (originOf(url) === appOrigin) return;
+  // Navigation and redirects may only stay on the verified Tutaj origin; anything else opens in the browser.
+  const keepOnServer = (e, url) => {
+    if (appOrigin !== '' && originOf(url) === appOrigin) return;
     e.preventDefault();
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
+  };
+  mainWindow.webContents.on('will-navigate', (e, url) => keepOnServer(e, e.url ?? url));
+  mainWindow.webContents.on('will-redirect', (e, url, _inPlace, isMainFrame) => {
+    if (e.isMainFrame ?? isMainFrame) keepOnServer(e, e.url ?? url);
   });
   // Server unreachable (offline, DNS, server down): show our own page instead of a blank window.
   mainWindow.webContents.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
-    if (isMainFrame && code !== -3 /* ERR_ABORTED */ && originOf(url) === appOrigin) showOffline(description);
+    if (isMainFrame && code !== -3 /* ERR_ABORTED */ && originOf(url) === appOrigin) showServerPage('unreachable', description);
   });
 
-  await mainWindow.loadURL(appUrl).catch(() => {}); // failures are handled by did-fail-load
+  await openServer();
 }
 
 app.on('second-instance', () => {
@@ -246,8 +375,8 @@ app.whenReady().then(async () => {
   } else {
     appUrl = settings.serverUrl;
   }
-  appOrigin = originOf(appUrl);
   registerIpc();
+  buildMenu();
   await createWindow();
 });
 

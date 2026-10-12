@@ -34,43 +34,83 @@
       details[open] { display: grid; gap: 8px; }
       summary { cursor: pointer; }
       .error { color: #ff9a9d; font-size: 13px; }
+      .hint { font-size: 12.5px; }
+      button:disabled { opacity: 0.6; cursor: default; }
       footer { text-align: center; font-size: 12px; color: #93aec9; }
     </style>
   </head>
   <body>
     <main class="card">
       <img class="logo" src="logo.webp" alt="Tutaj.eu.org by Lorem Ipsum" />
-      <h1>Brak połączenia</h1>
-      <p>Nie mogę połączyć się z serwerem <strong id="server"></strong>. Sprawdź internet i spróbuj ponownie.</p>
+      <h1 id="title">Brak połączenia</h1>
+      <p id="message"></p>
       <p class="reason" id="reason"></p>
       <div class="row">
         <button class="primary" id="retry">Spróbuj ponownie</button>
+        <button class="ghost" id="reset" hidden></button>
         <button class="ghost" id="lan">Uruchom tryb lokalny (sieć LAN, bez internetu)</button>
       </div>
-      <details>
+      <details id="change">
         <summary>Zmień serwer</summary>
-        <input id="server-url" type="url" placeholder="https://twoja-domena.pl" aria-label="Adres serwera Tutaj" />
-        <button class="ghost" id="save-server">Zapisz i uruchom ponownie</button>
+        <input id="server-url" type="text" placeholder="np. twoja-domena.pl" aria-label="Adres serwera Tutaj" />
+        <button class="ghost" id="save-server">Sprawdź i zapisz</button>
+        <p class="hint">Adres zostanie zapisany tylko wtedy, gdy działa pod nim serwer Tutaj.</p>
         <p class="error" id="server-error" hidden></p>
       </details>
-      <footer>© 2026 Lorem Ipsum · tutaj.eu.org</footer>
+      <footer>© 2026 Lorem Ipsum · tutaj.eu.org · menu aplikacji: klawisz Alt</footer>
     </main>
     <script>
       const q = new URLSearchParams(location.search);
-      document.getElementById('server').textContent = q.get('server') || 'Tutaj';
-      document.getElementById('reason').textContent = q.get('reason') ? 'Szczegóły: ' + q.get('reason') : '';
-      document.getElementById('retry').onclick = () => window.tutaj.retry();
-      document.getElementById('lan').onclick = () => window.tutaj.switchMode('lan');
-      const urlInput = document.getElementById('server-url');
-      urlInput.value = q.get('server') || '';
-      document.getElementById('save-server').onclick = async () => {
+      const $ = (id) => document.getElementById(id);
+      const kind = q.get('kind') || 'unreachable';
+      const server = q.get('server') || '';
+      const def = q.get('default') || '';
+      const host = (u) => { try { return new URL(u).host; } catch { return u; } };
+      const say = (el, text) => { el.textContent = ''; el.append(...text); };
+      const strong = (t) => Object.assign(document.createElement('strong'), { textContent: t });
+
+      if (kind === 'foreign') {
+        $('title').textContent = 'To nie jest serwer Tutaj';
+        say($('message'), ['Pod adresem ', strong(host(server)), ' nie działa serwer Tutaj, więc aplikacja go nie otworzyła. Wybierz inny serwer albo przywróć domyślny.']);
+        $('retry').textContent = 'Sprawdź ponownie';
+        $('change').open = true;
+      } else if (kind === 'choose') {
+        $('title').textContent = 'Serwer Tutaj';
+        say($('message'), [q.get('mode') === 'lan' ? 'Aplikacja działa w trybie lokalnym.' : 'Bieżący serwer: ', ...(q.get('mode') === 'lan' ? [] : [strong(host(server))])]);
+        $('retry').textContent = q.get('mode') === 'lan' ? 'Wróć do rozmowy' : `Wróć do ${host(server)}`;
+        $('change').open = true;
+      } else {
+        say($('message'), ['Nie mogę połączyć się z serwerem ', strong(host(server) || 'Tutaj'), '. Sprawdź internet i spróbuj ponownie.']);
+        // Retry on its own when the connection comes back.
+        window.addEventListener('online', () => window.tutaj.retry());
+      }
+      $('reason').textContent = q.get('reason') ? 'Szczegóły: ' + q.get('reason') : '';
+      if (def && host(def) !== host(server)) {
+        $('reset').hidden = false;
+        $('reset').textContent = `Przywróć ${host(def)}`;
+        $('reset').onclick = () => window.tutaj.setServer('');
+      }
+      $('retry').onclick = () => window.tutaj.retry();
+      $('lan').onclick = () => window.tutaj.switchMode('lan');
+
+      const urlInput = $('server-url');
+      urlInput.value = kind === 'foreign' ? '' : server;
+      const save = async () => {
+        const btn = $('save-server');
+        const err = $('server-error');
+        btn.disabled = true;
+        btn.textContent = 'Sprawdzam serwer…';
+        err.hidden = true;
         const res = await window.tutaj.setServer(urlInput.value);
         if (res && !res.ok) {
-          const err = document.getElementById('server-error');
           err.textContent = res.error;
           err.hidden = false;
+          btn.disabled = false;
+          btn.textContent = 'Sprawdź i zapisz';
         }
       };
+      $('save-server').onclick = save;
+      urlInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } };
       // Retry on its own when the connection comes back.
       window.addEventListener('online', () => window.tutaj.retry());
     </script>

@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
@@ -63,6 +63,17 @@ const RATE_WINDOW_MS = 1_000;
 const RATE_MAX = 200;
 
 const defaultClientDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'dist');
+
+/** Version of this server package (reported by /api/info). */
+const SERVER_VERSION: string = (() => {
+  try {
+    return JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version;
+  } catch {
+    return 'unknown';
+  }
+})();
+/** Signaling protocol generation; bump on incompatible changes. */
+const PROTOCOL_VERSION = 1;
 
 export async function startServer(options: ServerOptions = {}): Promise<RunningServer> {
   const log = options.log ?? ((msg: string) => console.log(`[tutaj] ${msg}`));
@@ -143,6 +154,13 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     const path = (req.url ?? '/').split('?')[0];
     if (path === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: true, ...rooms.stats() }));
+      return;
+    }
+    // Identifies a Tutaj server — the desktop app checks it before switching to a server address.
+    if (path === '/api/info') {
+      res
+        .writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+        .end(JSON.stringify({ app: 'tutaj', version: SERVER_VERSION, protocol: PROTOCOL_VERSION, sfu: !!sfu }));
       return;
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') {

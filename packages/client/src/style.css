@@ -164,6 +164,7 @@ summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .host-switch { display: block; margin-top: 10px; width: 100%; font-size: 13px; padding: 8px 12px; }
 .server-form { display: grid; gap: 8px; margin-top: 8px; }
 .server-form .primary, .server-form .ghost { font-size: 13px; padding: 8px 12px; }
+.server-hint { margin: 0; font-size: 12px; }
 
 /* ---- Room ---- */
 .room { height: 100%; display: grid; grid-template-columns: 1fr auto; grid-template-rows: 1fr auto; }

@@ -201,22 +201,30 @@ function serverChanger(bridge: DesktopBridge, info: DesktopInfo): HTMLElement {
   form.className = 'server-form';
   form.hidden = true;
   const input = document.createElement('input');
-  input.type = 'url';
+  input.type = 'text';
   input.value = info.serverUrl;
-  input.placeholder = 'https://twoja-domena.pl';
+  input.placeholder = 'np. twoja-domena.pl';
   input.setAttribute('aria-label', 'Adres serwera Tutaj');
   const save = document.createElement('button');
   save.type = 'button';
   save.className = 'primary';
-  save.textContent = 'Zapisz i uruchom ponownie';
+  save.textContent = 'Sprawdź i zapisz';
+  const hint = document.createElement('p');
+  hint.className = 'muted server-hint';
+  hint.textContent = 'Adres zostanie zapisany tylko wtedy, gdy działa pod nim serwer Tutaj.';
   const msg = document.createElement('p');
   msg.className = 'error';
   msg.hidden = true;
   const apply = async (url: string) => {
+    save.disabled = true;
+    save.textContent = 'Sprawdzam serwer…';
+    msg.hidden = true;
     const res = await bridge.setServer!(url);
     if (!res.ok) {
       msg.textContent = res.error ?? 'Nieprawidłowy adres';
       msg.hidden = false;
+      save.disabled = false;
+      save.textContent = 'Sprawdź i zapisz';
     }
   };
   save.onclick = () => void apply(input.value);
@@ -226,7 +234,7 @@ function serverChanger(bridge: DesktopBridge, info: DesktopInfo): HTMLElement {
       void apply(input.value);
     }
   };
-  form.append(input, save, msg);
+  form.append(input, save, hint, msg);
   if (info.defaultServer && info.serverUrl !== info.defaultServer) {
     const reset = document.createElement('button');
     reset.type = 'button';
