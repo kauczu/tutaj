@@ -3,7 +3,7 @@
 // this file and the images (see NOTICE.md).
 export const BRAND = {
   name: 'Tutaj',
-  tagline: 'Bezpieczna platforma komunikacyjna.',
+  tagline: 'Spójna platforma komunikacyjna.',
   logoAlt: 'Tutaj.eu.org by Lorem Ipsum',
   author: 'Lorem Ipsum',
   authorUrl: 'https://tutaj.eu.org',
