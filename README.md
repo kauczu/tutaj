@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <b>Wideorozmowy dla 2–4 osób — spotkajmy się tutaj.</b><br />
+  <b>Bezpieczna platforma komunikacyjna.</b><br />
   <a href="https://o.tutaj.eu.org">o.tutaj.eu.org</a> · autor: <a href="https://tutaj.eu.org">Lorem Ipsum</a> · licencja kodu: <a href="LICENSE">AGPL-3.0</a>
 </p>
 

@@ -3,7 +3,7 @@
 // this file and the images (see NOTICE.md).
 export const BRAND = {
   name: 'Tutaj',
-  tagline: 'Wideorozmowy dla 2–4 osób — spotkajmy się tutaj.',
+  tagline: 'Bezpieczna platforma komunikacyjna.',
   logoAlt: 'Tutaj.eu.org by Lorem Ipsum',
   author: 'Lorem Ipsum',
   authorUrl: 'https://tutaj.eu.org',

@@ -1,7 +1,7 @@
 {
   "name": "Tutaj",
   "short_name": "Tutaj",
-  "description": "Wideorozmowy dla 2–4 osób — spotkajmy się tutaj.",
+  "description": "Bezpieczna platforma komunikacyjna.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
