@@ -1,6 +1,6 @@
 {
   "name": "@tutaj/server",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Serwer sygnalizacji Tutaj (WebSocket) + hosting klienta + poświadczenia TURN.",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@tutaj/desktop",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Tutaj — wideorozmowy dla 2–4 osób. Aplikacja z wbudowanym serwerem (host w sieci LAN).",
   "author": "Lorem Ipsum (https://tutaj.eu.org)",

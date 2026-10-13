@@ -691,6 +691,10 @@ export class Room {
 
   /** Camera view in its own window — for a second monitor while gaming. */
   private toggleStage(): void {
+    // Desktop app older than 0.3.0: its main process blocks this window.
+    if (window.tutaj && !window.tutaj.displays) {
+      return toast('Okno kamer wymaga nowszej aplikacji desktopowej (0.3.0 lub nowszej) — zaktualizuj Tutaj', 'error');
+    }
     if (!this.stage.toggle()) toast('Przeglądarka zablokowała okno — zezwól na wyskakujące okna dla tej strony', 'error');
     this.updateControls();
   }
