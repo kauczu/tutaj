@@ -103,6 +103,10 @@ Zmienne (dla zaawansowanych i testów): `TUTAJ_MODE` (`remote`/`lan`), `TUTAJ_SE
 
 > Jeśli `npm run desktop` zgłasza brak pliku binarnego Electrona: `node node_modules/electron/install.js`.
 
+Wersje: interfejs aplikacji desktopowej (w trybie serwera) pochodzi z serwera, a sama aplikacja to osobny program –
+stopka lobby pokazuje obie wersje („serwer v… · aplikacja v…”). Ustawienia serwera i tryb LAN są w zwijanym bloku
+„Serwer i sieć” (w trybie LAN rozwiniętym).
+
 ### Instalator Windows (.exe)
 
 ```bash
@@ -214,7 +218,8 @@ Wspólne dla obu profili:
   (`RTCRtpEncodingParameters.codec`), niezależnie od preferencji rozmówcy;
 - przy przeciążeniu kamera traci rozdzielczość, a nie płynność (`degradationPreference: maintain-framerate`);
 - w aplikacji desktopowej okno rozmowy w tle (za grą) nie jest spowalniane przez Chromium;
-- „Wysyłasz: …” w Ustawieniach pokazuje bieżącą rozdzielczość, kodek (sprzętowo/programowo) i przepływności.
+- „Wysyłasz: …” w Ustawieniach pokazuje bieżącą rozdzielczość, kodek (sprzętowo/programowo) i przepływności;
+  znacznik **GPU** / **CPU** obok P2P/SFU na pasku rozmowy mówi, który koder faktycznie koduje teraz obraz kamery.
 
 Gdy ktoś wysyła w wysokiej jakości (dźwięk studyjny lub 1080p), pokój z ≥3 osobami od razu przechodzi na SFU –
 N−1 strumieni 1080p z jednego łącza to zbyt wiele dla typowego uploadu i dla pingu w grze.
@@ -227,8 +232,11 @@ przepływność jest ustawiana per nadawca (`RTCRtpSender.setParameters`), więc
 Małe kamery współgraczy w rogu ekranu, nad grą: nazwa, podświetlenie mówiącego, znacznik wyciszenia; osoba z wyłączoną
 kamerą zajmuje tylko wąski pasek. Gdy Twój mikrofon jest wyciszony, nad kafelkami świeci czerwony znacznik.
 
+- przycisk nakładki w pasku rozmowy; opcja „pokazanie nakładki minimalizuje okno rozmowy, ukrycie je przywraca”
+  (działa przy ręcznym przełączaniu, nie przy automatycznym otwarciu nakładki na początku rozmowy);
 - **skróty działające w grze** (aktywne tylko w trakcie rozmowy): domyślnie **Ctrl+Shift+O** – pokaż/ukryj nakładkę,
-  **Ctrl+Shift+M** – wycisz/włącz mikrofon (krótki sygnał dźwiękowy potwierdza zmianę). Można je zmienić w Ustawieniach:
+  **Ctrl+Shift+M** – wycisz/włącz mikrofon (krótki sygnał dźwiękowy potwierdza zmianę), **Ctrl+Shift+H** –
+  zminimalizuj/przywróć okno rozmowy. Można je zmienić w Ustawieniach:
   kliknij skrót i naciśnij nową kombinację (Ctrl, Alt lub Win z klawiszem albo sam klawisz F1–F24; skrót zajęty przez
   inny program jest odrzucany);
 - ustawienia (Ustawienia → Nakładka na grę): monitor, róg ekranu, rozmiar, krycie; zapamiętywane;

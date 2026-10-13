@@ -14,6 +14,8 @@ export interface OverlaySettings {
   opacity: number;
   /** Monitor (Electron display id); null = primary. */
   display: number | null;
+  /** Showing the overlay by hand minimizes the call window; hiding it restores the window (done by the app). */
+  minimizeCall: boolean;
 }
 
 /** Width of a camera tile in the overlay, CSS px. */

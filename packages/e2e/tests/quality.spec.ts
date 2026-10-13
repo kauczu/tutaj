@@ -92,8 +92,10 @@ test('gaming profile over P2P: studio stereo audio with redundancy, 1080p captur
   // Video stays within the 4 Mb/s limit, minus the audio (with RED) sent alongside.
   expect(a.videoMax[0]).toBeLessThanOrEqual(4_000_000 - 2 * 160_000);
   expect(a.degradation).toBe('maintain-framerate');
-  // No hardware encoder in the test browser: automatic choice stays on VP8.
+  // No hardware encoder in the test browser: automatic choice stays on VP8, shown as CPU encoding.
   expect(a.videoCodec).toBe('video/VP8');
+  await expect(ania.page.locator('#encoder-badge')).toHaveText('CPU');
+  await expect(ania.page.locator('#encoder-badge')).toHaveAttribute('title', /programowo.*VP8/);
 
   // Default profile on the other side: voice processing on, lower audio bitrate.
   const [b] = await mediaInfo(bartek.page);

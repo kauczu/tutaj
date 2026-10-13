@@ -305,6 +305,8 @@ function registerIpc() {
   // Only the app's own pages may use the bridge.
   const guard = (handler) => (event, ...args) => (isAppPage(event.senderFrame?.url ?? '') ? handler(...args) : null);
   ipcMain.handle('tutaj:info', guard(() => ({
+    /** Version of this desktop app (the web client shows the server's own version). */
+    appVersion: app.getVersion(),
     mode: settings.mode,
     serverUrl: settings.serverUrl,
     defaultServer: DEFAULT_SERVER,
@@ -318,7 +320,10 @@ function registerIpc() {
   // While the user records a new shortcut, the current ones must not fire.
   ipcMain.handle('tutaj:hotkeys-pause', guard((paused) => (paused === true ? unregisterHotkeys() : inCall && registerHotkeys())));
   ipcMain.handle('tutaj:overlay-set', guard((patch) => {
+    const wasEnabled = settings.overlay.enabled;
     settings.overlay = sanitizeOverlay({ ...settings.overlay, ...(patch && typeof patch === 'object' ? patch : {}) });
+    // Only a change of `enabled` comes from the user toggling the overlay (not its automatic opening on join).
+    if (settings.overlay.minimizeCall && settings.overlay.enabled !== wasEnabled) setCallWindow(!settings.overlay.enabled);
     saveSettings({ overlay: settings.overlay });
     placeOverlay();
     return settings.overlay;
@@ -351,8 +356,23 @@ function sanitizeOverlay(o) {
     opacity: [1, 0.85, 0.7, 0.5].includes(v.opacity) ? v.opacity : 0.85,
     /** Electron display id; null = primary monitor (where games usually run). */
     display: Number.isSafeInteger(v.display) ? v.display : null,
+    /** Showing the overlay (by hand) minimizes the call window; hiding it restores the window. */
+    minimizeCall: v.minimizeCall === true,
   };
 }
+
+/** Minimizes the call window, or brings it back (shortcut, or together with the overlay). */
+function setCallWindow(visible) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!visible) mainWindow.minimize();
+  else {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+const toggleCallWindow = () => setCallWindow(!mainWindow || mainWindow.isMinimized() || !mainWindow.isVisible());
 
 function listDisplays() {
   const primary = screen.getPrimaryDisplay().id;
@@ -436,7 +456,7 @@ function setInCall(on) {
 
 /** Global shortcuts, active only during a call: they work while a game has focus. */
 function defaultHotkeys() {
-  return { overlay: 'CommandOrControl+Shift+O', mute: 'CommandOrControl+Shift+M' };
+  return { overlay: 'CommandOrControl+Shift+O', mute: 'CommandOrControl+Shift+M', window: 'CommandOrControl+Shift+H' };
 }
 
 function sanitizeHotkeys(h) {
@@ -460,7 +480,9 @@ function registerHotkeys() {
   unregisterHotkeys();
   for (const [name, accelerator] of Object.entries(settings.hotkeys)) {
     try {
-      if (globalShortcut.register(accelerator, () => sendHotkey(name))) registered.push(accelerator);
+      // The call window shortcut is handled here: it must work while the page is minimized or hidden.
+      const action = name === 'window' ? toggleCallWindow : () => sendHotkey(name);
+      if (globalShortcut.register(accelerator, action)) registered.push(accelerator);
       else console.warn(`shortcut ${accelerator} is taken`);
     } catch (err) {
       console.warn(`shortcut ${accelerator} is invalid`, err);

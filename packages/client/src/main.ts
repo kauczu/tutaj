@@ -11,6 +11,8 @@ import { setIcon } from './ui/icons';
 
 /** Exposed by the Electron preload when running as the desktop app. */
 interface DesktopInfo {
+  /** Version of the desktop app (0.3.0+); the page itself comes from the server. */
+  appVersion?: string;
   /** remote: window onto the Tutaj server; lan: the app hosts calls on the local network. */
   mode: 'remote' | 'lan';
   serverUrl: string;
@@ -29,19 +31,22 @@ interface DesktopBridge {
     get(): Promise<
       OverlaySettings & {
         displays: { id: number; label: string; width: number; height: number; primary: boolean }[];
-        hotkeys: Record<'overlay' | 'mute', string>;
+        hotkeys: Record<'overlay' | 'mute' | 'window', string>;
       }
     >;
     set(patch: Partial<OverlaySettings>): Promise<OverlaySettings>;
     resize(width: number, height: number): Promise<void>;
   };
   /** Changes a global shortcut (Electron accelerator; null = default). */
-  setHotkey?(name: 'overlay' | 'mute', accelerator: string | null): Promise<{ ok: boolean; error?: string; hotkeys?: Record<'overlay' | 'mute', string> }>;
+  setHotkey?(
+    name: 'overlay' | 'mute' | 'window',
+    accelerator: string | null,
+  ): Promise<{ ok: boolean; error?: string; hotkeys?: Record<'overlay' | 'mute' | 'window', string> }>;
   /** Suspends global shortcuts while a new one is being recorded. */
   pauseHotkeys?(paused: boolean): Promise<void>;
   /** Enables the global shortcuts for the duration of a call. */
   setInCall?(inCall: boolean): Promise<void>;
-  onHotkey?(cb: (name: 'overlay' | 'mute') => void): () => void;
+  onHotkey?(cb: (name: 'overlay' | 'mute' | 'window') => void): () => void;
 }
 declare global {
   interface Window {
@@ -183,8 +188,12 @@ function link(text: string, href: string): HTMLAnchorElement {
   return a;
 }
 
-/** Author, repository and licence: lobby footer and the "about" section in settings. */
-function renderBranding(): void {
+/**
+ * Author, repository and licence: lobby footer and the "about" section in settings.
+ * The page comes from the server, so APP_VERSION is the server's version; the desktop app has its own.
+ */
+function renderBranding(desktopVersion?: string): void {
+  const versions = desktopVersion ? `serwer v${APP_VERSION} · aplikacja v${desktopVersion}` : `v${APP_VERSION}`;
   $('tagline').textContent = BRAND.tagline;
   const repoLabel = BRAND.repoUrl.replace(/^https:\/\//, '');
   $('lobby-footer').replaceChildren(
@@ -192,7 +201,7 @@ function renderBranding(): void {
     link(BRAND.author, BRAND.authorUrl),
     ' · ',
     link('GitHub', BRAND.repoUrl),
-    ` · ${BRAND.license} · v${APP_VERSION}`,
+    ` · ${BRAND.license} · ${versions}`,
   );
   const logo = document.createElement('img');
   logo.src = '/logo.webp';
@@ -204,7 +213,7 @@ function renderBranding(): void {
   };
   $('about').replaceChildren(
     logo,
-    p(`${BRAND.name} v${APP_VERSION} · © ${BRAND.year} `, link(BRAND.author, BRAND.authorUrl)),
+    p(`${BRAND.name} ${versions} · © ${BRAND.year} `, link(BRAND.author, BRAND.authorUrl)),
     p('Kod źródłowy: ', link(repoLabel, BRAND.repoUrl), ` (${BRAND.license})`),
     p('Nazwa, logo i grafika: wszelkie prawa zastrzeżone.'),
   );
@@ -277,8 +286,13 @@ async function showDesktopInfo(): Promise<void> {
   const bridge = window.tutaj;
   const info = await bridge?.info?.().catch(() => null);
   if (!bridge || !info) return;
+  if (info.appVersion) renderBranding(info.appVersion);
+  const details = $<HTMLDetailsElement>('host-details');
+  details.hidden = false;
+  // In LAN mode the addresses for the others matter right away.
+  details.open = info.mode === 'lan';
+  $('host-summary').textContent = info.mode === 'lan' ? 'Serwer i sieć — tryb lokalny (LAN)' : `Serwer i sieć — ${new URL(info.serverUrl).host}`;
   const box = $('host-info');
-  box.hidden = false;
   box.replaceChildren();
   const title = document.createElement('strong');
   const switchBtn = document.createElement('button');

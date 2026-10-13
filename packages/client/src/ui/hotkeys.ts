@@ -1,6 +1,6 @@
 // Global shortcuts of the desktop app: recording a key combination as an Electron accelerator.
 
-export type HotkeyName = 'overlay' | 'mute';
+export type HotkeyName = 'overlay' | 'mute' | 'window';
 export type Hotkeys = Record<HotkeyName, string>;
 
 const NAMED: Record<string, string> = {

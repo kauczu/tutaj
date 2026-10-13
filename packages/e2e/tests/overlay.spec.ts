@@ -25,13 +25,17 @@ function fakeDesktopBridge() {
   const ov = (window.__ov = {
     calls: [] as unknown[][],
     hotkey: null as ((name: string) => void) | null,
-    settings: { enabled: false, corner: 'top-right', size: 'm', opacity: 0.85, display: null } as Record<string, unknown>,
+    settings: { enabled: false, corner: 'top-right', size: 'm', opacity: 0.85, display: null, minimizeCall: false } as Record<string, unknown>,
   });
-  const defaults: Record<string, string> = { overlay: 'CommandOrControl+Shift+O', mute: 'CommandOrControl+Shift+M' };
+  const defaults: Record<string, string> = {
+    overlay: 'CommandOrControl+Shift+O',
+    mute: 'CommandOrControl+Shift+M',
+    window: 'CommandOrControl+Shift+H',
+  };
   let hotkeys = { ...defaults };
   (window as unknown as { tutaj: unknown }).tutaj = {
     isDesktop: true,
-    info: async () => null,
+    info: async () => ({ appVersion: '9.9.9', mode: 'remote', serverUrl: location.origin, defaultServer: location.origin, lan: null }),
     switchMode: async () => {},
     overlay: {
       get: async () => ({ ...ov.settings, hotkeys, displays: [{ id: 1, label: 'Monitor', width: 1920, height: 1080, primary: true }] }),
@@ -64,6 +68,9 @@ test('game overlay: cameras of the others, muted badge, size reported to the app
   people.push(bartek);
   await ania.expectVideoFrom('Bartek');
   await expect.poll(() => ania.page.evaluate(() => window.__ov.calls)).toContainEqual(['inCall', true]);
+  // Desktop app: overlay button in the call bar, with its shortcut.
+  await expect(ania.page.locator('#btn-overlay')).toBeVisible();
+  await expect(ania.page.locator('#btn-overlay')).toHaveAttribute('title', 'Nakładka na grę (Ctrl+Shift+O)');
 
   // Turned on in the settings (the desktop app also toggles it with Ctrl+Shift+O).
   await ania.page.click('#btn-settings');
@@ -73,6 +80,7 @@ test('game overlay: cameras of the others, muted badge, size reported to the app
   const [overlay] = await Promise.all([ania.page.waitForEvent('popup'), ania.page.check('#overlay-enabled')]);
   await expect(overlay).toHaveTitle('Tutaj — nakładka');
   expect(await ania.page.evaluate(() => window.__ov.settings.enabled)).toBe(true);
+  await expect(ania.page.locator('#btn-overlay')).toHaveAttribute('aria-pressed', 'true');
 
   // Only the others, live video, no badge while our mic is on.
   await expect(overlay.locator('.tile .name')).toHaveText(['Bartek']);
@@ -102,10 +110,21 @@ test('game overlay: cameras of the others, muted badge, size reported to the app
   await expect(overlay.locator('#root')).toHaveCSS('--w', '380px');
   await ania.page.getByRole('button', { name: 'Zamknij' }).click();
 
-  // Overlay shortcut hides it; leaving the call releases the shortcuts.
+  // Overlay shortcut hides it, the button shows it again; leaving the call releases the shortcuts.
   await ania.page.evaluate(() => window.__ov.hotkey?.('overlay'));
   await expect.poll(() => overlay.isClosed()).toBe(true);
   expect(await ania.page.evaluate(() => window.__ov.settings.enabled)).toBe(false);
+  await expect(ania.page.locator('#btn-overlay')).toHaveAttribute('aria-pressed', 'false');
+  const [again] = await Promise.all([ania.page.waitForEvent('popup'), ania.page.click('#btn-overlay')]);
+  await expect(again.locator('.tile .name')).toHaveText(['Bartek']);
+  await ania.page.click('#btn-overlay');
+  await expect.poll(() => again.isClosed()).toBe(true);
+
+  // "Minimize the call window with the overlay" is the app's job; the page only stores the choice.
+  await ania.page.click('#btn-settings');
+  await ania.page.check('#overlay-minimize');
+  await expect.poll(() => ania.page.evaluate(() => window.__ov.settings.minimizeCall)).toBe(true);
+  await ania.page.getByRole('button', { name: 'Zamknij' }).click();
   await ania.page.click('#btn-leave');
   // The page reloads to the lobby; the call ended with setInCall(false) before that.
   await expect(ania.page.locator('#join-form')).toBeVisible();
@@ -125,6 +144,7 @@ test('shortcuts can be redefined: recorded from a key press, validated, restored
   await page.click('#btn-settings');
   await expect(page.locator('#hotkey-overlay')).toHaveText('Ctrl+Shift+O');
   await expect(page.locator('#hotkey-mute')).toHaveText('Ctrl+Shift+M');
+  await expect(page.locator('#hotkey-window')).toHaveText('Ctrl+Shift+H');
 
   await page.click('#hotkey-mute');
   await expect(page.locator('#hotkey-mute')).toContainText('Naciśnij skrót');
@@ -156,4 +176,19 @@ test('shortcuts can be redefined: recorded from a key press, validated, restored
   await page.getByRole('button', { name: 'Przywróć domyślne skróty' }).click();
   await expect(page.locator('#hotkey-overlay')).toHaveText('Ctrl+Shift+O');
   await expect(page.locator('#hotkey-mute')).toHaveText('Ctrl+Shift+M');
+});
+
+test('desktop lobby: server block collapsed, server and app versions in the footer', async ({ browser }) => {
+  const ania = await Participant.open(browser, srv.url, 'lobby', 'Ania');
+  people.push(ania);
+  await ania.page.addInitScript(fakeDesktopBridge);
+  await ania.page.reload();
+  const details = ania.page.locator('#host-details');
+  await expect(details).toBeVisible();
+  await expect(ania.page.locator('#host-summary')).toHaveText('Serwer i sieć — 127.0.0.1:' + new URL(srv.url).port);
+  await expect(details).not.toHaveAttribute('open', '');
+  await expect(ania.page.getByRole('button', { name: 'Przełącz na tryb lokalny (sieć LAN)' })).toBeHidden();
+  await ania.page.click('#host-summary');
+  await expect(ania.page.getByRole('button', { name: 'Przełącz na tryb lokalny (sieć LAN)' })).toBeVisible();
+  await expect(ania.page.locator('#lobby-footer')).toContainText(/serwer v\d+\.\d+\.\d+ · aplikacja v9\.9\.9/);
 });

@@ -603,6 +603,7 @@ export class Room {
     on('btn-hand', () => this.toggleHand());
     on('btn-chat', () => this.chat.toggle());
     on('btn-record', () => void this.toggleRecording());
+    on('btn-overlay', () => void this.setOverlay(!this.overlay?.isOpen));
     on('btn-settings', () => void this.openSettings());
     on('btn-leave', () => void this.leave());
     on('btn-invite', () => void this.copyInvite());
@@ -651,6 +652,9 @@ export class Room {
     setIcon($('btn-record'), 'record');
     $('btn-record').classList.toggle('recording', this.recorder.active);
     setIcon($('btn-settings'), 'settings');
+    setIcon($('btn-overlay'), 'overlay');
+    $('btn-overlay').classList.toggle('active', !!this.overlay?.isOpen);
+    $('btn-overlay').setAttribute('aria-pressed', String(!!this.overlay?.isOpen));
     setIcon($('btn-leave'), 'leave');
   }
 
@@ -663,6 +667,7 @@ export class Room {
     const settings = await bridge.overlay.get().catch(() => null);
     if (!settings || this.leaving) return;
     this.overlay = new GameOverlay(this.grid, settings, (w, h) => void bridge.overlay!.resize(w, h));
+    this.setOverlayButton(settings.hotkeys);
     await bridge.setInCall(true);
     const off = bridge.onHotkey((name) => {
       if (name === 'overlay') void this.setOverlay(!this.overlay?.isOpen);
@@ -673,6 +678,13 @@ export class Room {
       void bridge.setInCall!(false);
     });
     if (settings.enabled) this.overlay.open();
+    this.updateControls();
+  }
+
+  private setOverlayButton(hotkeys?: Record<string, string>): void {
+    const btn = $('btn-overlay');
+    btn.hidden = !this.overlay;
+    btn.title = `Nakładka na grę${hotkeys?.overlay ? ` (${formatAccelerator(hotkeys.overlay)})` : ''}`;
   }
 
   private async setOverlay(on: boolean): Promise<void> {
@@ -680,6 +692,7 @@ export class Room {
     if (!this.overlay || !bridge?.overlay) return;
     if (on) this.overlay.open();
     else this.overlay.close();
+    this.updateControls();
     await bridge.overlay.set({ enabled: on });
     if ($<HTMLDialogElement>('settings').open) void this.renderOverlaySettings();
   }
@@ -711,6 +724,11 @@ export class Room {
     show.id = 'overlay-enabled';
     show.checked = this.overlay.isOpen;
     show.onchange = () => void this.setOverlay(show.checked);
+    const minimize = h('input');
+    minimize.type = 'checkbox';
+    minimize.id = 'overlay-minimize';
+    minimize.checked = current.minimizeCall;
+    minimize.onchange = () => void apply({ minimizeCall: minimize.checked });
     const displays = current.displays.map((d, i): [string, string] => [
       String(d.id),
       `Ekran ${i + 1}: ${d.label || 'monitor'} — ${d.width}×${d.height}${d.primary ? ' (główny)' : ''}`,
@@ -719,6 +737,7 @@ export class Room {
     box.replaceChildren(
       h('legend', { text: 'Nakładka na grę' }),
       h('label', { class: 'check' }, show, 'Pokaż nakładkę z kamerami nad grą'),
+      h('label', { class: 'check' }, minimize, 'Pokazanie nakładki minimalizuje okno rozmowy, ukrycie je przywraca'),
       ...(displays.length > 1
         ? [label('Monitor', select('overlay-display', String(current.display ?? ''), [['', 'Główny'], ...displays], (v) => void apply({ display: v ? Number(v) : null })))]
         : []),
@@ -753,6 +772,7 @@ export class Room {
     const labels: [HotkeyName, string][] = [
       ['overlay', 'Pokaż/ukryj nakładkę'],
       ['mute', 'Wycisz/włącz mikrofon'],
+      ['window', 'Zminimalizuj/przywróć okno rozmowy'],
     ];
     const buttons = new Map<HotkeyName, HTMLButtonElement>();
     let stopRecording: (() => void) | null = null;
@@ -761,7 +781,10 @@ export class Room {
     };
     const save = async (name: HotkeyName, accelerator: string | null) => {
       const res = await bridge.setHotkey!(name, accelerator);
-      if (res.ok && res.hotkeys) hotkeys = res.hotkeys;
+      if (res.ok && res.hotkeys) {
+        hotkeys = res.hotkeys;
+        this.setOverlayButton(hotkeys);
+      }
       error.textContent = res.ok ? '' : `${accelerator ? formatAccelerator(accelerator) : ''}: ${res.error ?? 'nie udało się zapisać'}`;
       error.hidden = res.ok;
       showAll();
@@ -931,8 +954,24 @@ export class Room {
     );
     const report = await this.sfu?.sendStats().catch(() => null);
     this.sfuSend = report ? this.sfuMeter.sample(report) : null;
+    this.updateEncoderBadge();
     this.sendQualityReport();
     if ($<HTMLDialogElement>('settings').open) this.renderStats();
+  }
+
+  /** GPU/CPU next to P2P/SFU: which encoder our camera video actually uses right now. */
+  private updateEncoderBadge(): void {
+    const send =
+      this.mode === 'sfu' ? this.sfuSend : [...this.peers.values()].map((p) => p.stats?.send).find((s) => s?.hardware != null && s.resolution);
+    const badge = $('encoder-badge');
+    const known = !!send?.resolution && send.hardware != null;
+    badge.hidden = !known;
+    if (!known) return;
+    badge.textContent = send!.hardware ? 'GPU' : 'CPU';
+    badge.className = `mode-badge ${send!.hardware ? 'gpu' : 'cpu'}`;
+    badge.title = send!.hardware
+      ? `Obraz kodowany sprzętowo — karta graficzna (${send!.codec ?? 'wideo'})`
+      : `Obraz kodowany programowo — procesor (${send!.codec ?? 'wideo'})`;
   }
 
   /** "What am I sending": resolution, codec/encoder and bitrates, for checking quality during a game. */

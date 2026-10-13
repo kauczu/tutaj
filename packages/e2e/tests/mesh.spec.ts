@@ -18,6 +18,9 @@ test('two people: P2P video both ways, chat and a file over DataChannel', async 
   await bartek.expectVideoFrom('Ania');
   await expect(ania.badge).toHaveText('P2P');
   await ania.expectMediaPath('mesh');
+  // Plain browser: no desktop-only parts.
+  await expect(ania.page.locator('#btn-overlay')).toBeHidden();
+  await expect(ania.page.locator('#host-details')).toBeHidden();
 
   // Chat (HTML must be shown as text, links become links).
   await ania.sendChat('Cześć! <b>tu</b> https://example.com');

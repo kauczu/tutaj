@@ -61,7 +61,10 @@
             </label>
           </details>
 
-          <div id="host-info" class="host-info" hidden></div>
+          <details id="host-details" class="host-details" hidden>
+            <summary id="host-summary">Serwer i sieć</summary>
+            <div id="host-info" class="host-info"></div>
+          </details>
           <p id="lobby-error" class="error" role="alert" hidden></p>
           <button id="join" class="primary" type="submit">Dołącz</button>
         </form>
@@ -94,6 +97,7 @@
         <div class="room-info">
           <span id="room-name"></span>
           <span id="mode-badge" class="mode-badge mesh">P2P</span>
+          <span id="encoder-badge" class="mode-badge" hidden></span>
           <span id="timer">00:00</span>
         </div>
         <div class="buttons">
@@ -102,6 +106,7 @@
           <button id="btn-screen" class="round" type="button" title="Udostępnij ekran (S)"></button>
           <button id="btn-hand" class="round" type="button" title="Podnieś rękę (H)"></button>
           <button id="btn-chat" class="round" type="button" title="Czat (C)"><span id="chat-badge" class="badge" hidden></span></button>
+          <button id="btn-overlay" class="round" type="button" title="Nakładka na grę" hidden></button>
           <button id="btn-record" class="round" type="button" title="Nagrywaj lokalnie"></button>
           <button id="btn-settings" class="round" type="button" title="Ustawienia"></button>
           <button id="btn-leave" class="round danger" type="button" title="Opuść"></button>
