@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, net, screen, session, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, net, session, shell } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -105,8 +105,6 @@ function loadSettings() {
   return {
     mode: mode === 'lan' ? 'lan' : 'remote',
     serverUrl: isAllowedServer(serverUrl) ? serverUrl : DEFAULT_SERVER,
-    /** Monitor for the camera window (Electron display id); null = the one without the call window. */
-    stageDisplay: Number.isSafeInteger(saved.stageDisplay) ? saved.stageDisplay : null,
   };
 }
 
@@ -313,82 +311,12 @@ function registerIpc() {
   ipcMain.handle('tutaj:switch-mode', guard((mode) => switchMode(mode)));
   ipcMain.handle('tutaj:set-server', guard((url) => setServer(url)));
   ipcMain.handle('tutaj:retry', guard(() => openServer()));
-  ipcMain.handle('tutaj:displays', guard(() => {
-    const displays = listDisplays();
-    return { displays, selected: displays.some((d) => d.id === settings.stageDisplay) ? settings.stageDisplay : null };
-  }));
-  ipcMain.handle('tutaj:set-stage-display', guard((id) => {
-    settings.stageDisplay = Number.isSafeInteger(id) ? id : null;
-    saveSettings({ stageDisplay: settings.stageDisplay ?? undefined });
-  }));
-}
-
-// --- Camera window (second monitor) ------------------------------------------
-
-/** Window name the web client gives its camera popup (`STAGE_WINDOW_NAME`). */
-const STAGE_NAME = 'tutaj-stage';
-let stageWindow = null;
-
-function listDisplays() {
-  const current = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()).id : null;
-  const primary = screen.getPrimaryDisplay().id;
-  return screen.getAllDisplays().map((d) => ({
-    id: d.id,
-    label: d.label ?? '',
-    width: Math.round(d.size.width * d.scaleFactor),
-    height: Math.round(d.size.height * d.scaleFactor),
-    primary: d.id === primary,
-    current: d.id === current,
-  }));
-}
-
-/** The chosen monitor if still connected, else any monitor other than the call window's (null with one monitor). */
-function stageDisplay() {
-  const all = screen.getAllDisplays();
-  const chosen = all.find((d) => d.id === settings.stageDisplay);
-  if (chosen) return chosen;
-  const current = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()).id : null;
-  return all.find((d) => d.id !== current) ?? null;
-}
-
-/** Options for the camera popup: on the target monitor, then fullscreen there (see did-create-window). */
-function stageWindowOptions() {
-  const display = stageDisplay();
-  const area = (display ?? screen.getDisplayMatching(mainWindow.getBounds())).workArea;
-  const width = Math.round(area.width * (display ? 1 : 0.6));
-  const height = Math.round(area.height * (display ? 1 : 0.6));
-  return {
-    x: area.x + Math.round((area.width - width) / 2),
-    y: area.y + Math.round((area.height - height) / 2),
-    width,
-    height,
-    title: 'Tutaj — kamery',
-    backgroundColor: '#02060c',
-    autoHideMenuBar: true,
-    ...(app.isPackaged ? {} : { icon: join(here, 'build', 'icon.png') }),
-    webPreferences: { backgroundThrottling: false },
-  };
-}
-
-function adoptStageWindow(child) {
-  stageWindow = child;
-  child.on('closed', () => {
-    if (stageWindow === child) stageWindow = null;
-  });
-  child.setMenu(null);
-  // It is a blank page scripted by the call window: nothing may open or navigate from it.
-  child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  child.webContents.on('will-navigate', (e) => e.preventDefault());
-  // Fullscreen on a second monitor; with a single monitor it stays a normal window.
-  if (stageDisplay()) child.setFullScreen(true);
 }
 
 async function createWindow() {
   const ses = session.defaultSession;
   ses.setPermissionRequestHandler((wc, permission, callback) => {
     const trusted = originOf(wc.getURL()) === appOrigin;
-    // The camera window (about:blank) may only go fullscreen.
-    if (stageWindow && wc === stageWindow.webContents) return callback(permission === 'fullscreen');
     callback(trusted && ['media', 'display-capture', 'clipboard-sanitized-write', 'notifications', 'fullscreen'].includes(permission));
   });
   ses.setDisplayMediaRequestHandler(async (_request, callback) => {
@@ -418,16 +346,9 @@ async function createWindow() {
   });
 
   // Links (chat, invites, other sites) open in the system browser, never inside the app.
-  mainWindow.webContents.setWindowOpenHandler(({ url, frameName }) => {
-    // The camera window: a blank same-origin popup the call page fills with its video streams.
-    if (frameName === STAGE_NAME && url === 'about:blank' && isAppPage(mainWindow.webContents.getURL())) {
-      return { action: 'allow', overrideBrowserWindowOptions: stageWindowOptions() };
-    }
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
-  });
-  mainWindow.webContents.on('did-create-window', (child, { frameName }) => {
-    if (frameName === STAGE_NAME) adoptStageWindow(child);
   });
   // Navigation and redirects may only stay on the verified Tutaj origin; anything else opens in the browser.
   const keepOnServer = (e, url) => {

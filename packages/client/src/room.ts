@@ -13,7 +13,6 @@ import { $, download, fillDeviceSelect, h } from './ui/dom';
 import { Grid, Tile } from './ui/grid';
 import { setIcon } from './ui/icons';
 import { renderQualityForm } from './ui/quality-form';
-import { StageWindow } from './ui/stage';
 import { toast } from './ui/toast';
 
 export interface RoomOptions {
@@ -122,7 +121,6 @@ export class Room {
   private readonly chat: ChatPanel;
   private readonly speaking: SpeakingDetector;
   private readonly recorder: CallRecorder;
-  private readonly stage: StageWindow;
   private readonly startedAt = Date.now();
   private readonly timers: number[] = [];
   private readonly cleanups: (() => void)[] = [];
@@ -162,8 +160,6 @@ export class Room {
           (t): t is MediaStreamTrack => !!t,
         ),
     );
-
-    this.stage = new StageWindow(this.grid, () => this.updateControls());
 
     this.cleanups.push(this.media.on('change', () => this.onLocalMediaChange()));
     this.bindControls();
@@ -602,7 +598,6 @@ export class Room {
     on('btn-hand', () => this.toggleHand());
     on('btn-chat', () => this.chat.toggle());
     on('btn-record', () => void this.toggleRecording());
-    on('btn-stage', () => this.toggleStage());
     on('btn-settings', () => void this.openSettings());
     on('btn-leave', () => void this.leave());
     on('btn-invite', () => void this.copyInvite());
@@ -619,7 +614,6 @@ export class Room {
         s: () => void this.toggleScreen(),
         h: () => this.toggleHand(),
         c: () => this.chat.toggle(),
-        k: () => this.toggleStage(),
       };
       const action = actions[e.key.toLowerCase()];
       if (action) {
@@ -652,9 +646,6 @@ export class Room {
     setIcon($('btn-record'), 'record');
     $('btn-record').classList.toggle('recording', this.recorder.active);
     setIcon($('btn-settings'), 'settings');
-    setIcon($('btn-stage'), 'monitor');
-    $('btn-stage').classList.toggle('active', this.stage?.isOpen ?? false);
-    $('btn-stage').setAttribute('aria-pressed', String(this.stage?.isOpen ?? false));
     setIcon($('btn-leave'), 'leave');
   }
 
@@ -687,16 +678,6 @@ export class Room {
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'NotAllowedError')) toast(`Ekran: ${describeMediaError(e)}`, 'error');
     }
-  }
-
-  /** Camera view in its own window — for a second monitor while gaming. */
-  private toggleStage(): void {
-    // Desktop app older than 0.3.0: its main process blocks this window.
-    if (window.tutaj && !window.tutaj.displays) {
-      return toast('Okno kamer wymaga nowszej aplikacji desktopowej (0.3.0 lub nowszej) — zaktualizuj Tutaj', 'error');
-    }
-    if (!this.stage.toggle()) toast('Przeglądarka zablokowała okno — zezwól na wyskakujące okna dla tej strony', 'error');
-    this.updateControls();
   }
 
   private toggleHand(): void {
@@ -768,32 +749,8 @@ export class Room {
       : 'Serwer nie ma włączonego SFU — media zawsze płyną P2P.';
     modeSelect.onchange = () => this.signaling.send({ type: 'set-mode', pref: modeSelect.value as ModePreference });
     renderQualityForm($('quality-room'), this.media, (msg) => toast(msg, 'error'));
-    void this.renderStageDisplays();
     this.renderStats();
     dialog.showModal();
-  }
-
-  /** Desktop app with 2+ monitors: which one gets the camera window. */
-  private async renderStageDisplays(): Promise<void> {
-    const wrap = $('set-stage-display-wrap');
-    const select = $<HTMLSelectElement>('set-stage-display');
-    const bridge = window.tutaj;
-    const info = await bridge?.displays?.().catch(() => null);
-    wrap.hidden = !bridge?.setStageDisplay || !info || info.displays.length < 2;
-    if (wrap.hidden || !info) return;
-    const option = (value: string, text: string) => {
-      const o = h('option', { text });
-      o.value = value;
-      o.selected = value === String(info.selected ?? '');
-      return o;
-    };
-    select.replaceChildren(
-      option('', 'Automatycznie — inny niż okno rozmowy'),
-      ...info.displays.map((d, i) =>
-        option(String(d.id), `Ekran ${i + 1}: ${d.label || 'monitor'} — ${d.width}×${d.height}${d.primary ? ' (główny)' : ''}${d.current ? ' (tu jest Tutaj)' : ''}`),
-      ),
-    );
-    select.onchange = () => void bridge!.setStageDisplay!(select.value ? Number(select.value) : null);
   }
 
   private async pollStats(): Promise<void> {
@@ -866,7 +823,6 @@ export class Room {
     if (this.recorder.active) await this.saveRecording();
     for (const p of this.peers.values()) p.sendApp({ t: 'bye' } satisfies AppMessage);
     this.sfu?.close();
-    this.stage.close();
     this.signaling.send({ type: 'leave' });
     this.signaling.close();
     for (const id of [...this.peers.keys()]) this.removePeer(id);

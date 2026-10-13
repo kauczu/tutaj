@@ -33,7 +33,6 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - hasło pokoju, link z zaproszeniem, skróty klawiszowe (M, V, S, H, C)
 - **rozmowa przetrwa awarię serwera** – trwające połączenia P2P działają dalej, klient sam wraca i wznawia sesję
 - **hybryda P2P/SFU** – automatyczne przełączanie (lub ręczne: Ustawienia → Tryb mediów), simulcast, wskaźnik P2P/SFU na pasku
-- **okno kamer na drugi monitor** (przycisk z dwoma ekranami lub K) – duże kafelki współgraczy obok gry
 - **profil jakości „Gra”** – dźwięk studyjny, kamera 1080p, sprzętowe kodowanie i limit wysyłania (zob. niżej)
 - PWA (instalowalna, działa offline jako „powłoka”), aplikacja desktopowa (Electron)
 
@@ -221,18 +220,6 @@ N−1 strumieni 1080p z jednego łącza to zbyt wiele dla typowego uploadu i dla
 
 Stereo i wysoki bitrate Opusa w P2P wymagają parametrów `stereo=1`/`maxaveragebitrate` w SDP (`tuneOpusSdp`); docelowa
 przepływność jest ustawiana per nadawca (`RTCRtpSender.setParameters`), więc zmienia się bez renegocjacji.
-
-### Okno kamer (drugi monitor)
-
-Przycisk z dwoma ekranami (skrót **K**) otwiera osobne okno z kamerami współrozmówców – duże kafelki, podświetlenie
-mówiącego, znacznik wyciszenia. Własna kamera jest domyślnie ukryta („Pokaż mnie” na pasku okna, który pojawia się po
-ruszeniu myszą). Dźwięk gra dalej w oknie rozmowy. Okno pokazuje te same strumienie co rozmowa – bez dodatkowego dekodowania
-i ruchu sieciowego.
-
-- **aplikacja desktopowa**: okno otwiera się na pełnym ekranie drugiego monitora (tego, na którym nie ma okna rozmowy);
-  przy 3+ monitorach wybór w Ustawieniach („Ekran dla okna kamer”), zapamiętywany;
-- **przeglądarka**: zwykłe okno (trzeba zezwolić na wyskakujące okna) – przeciągnij je na drugi monitor, dwuklik lub F
-  włącza pełny ekran.
 
 ## SFU: kiedy i jak
 
