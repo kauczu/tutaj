@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "@tutaj/server": "0.2.1",
+    "@tutaj/server": "0.3.0",
     "@types/node": "22.20.4",
     "ws": "8.21.3"
   },

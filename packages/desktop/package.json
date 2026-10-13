@@ -12,7 +12,7 @@
     "pack": "electron-builder --win dir --x64 --publish never"
   },
   "dependencies": {
-    "@tutaj/server": "0.2.1"
+    "@tutaj/server": "0.3.0"
   },
   "devDependencies": {
     "electron": "44.4.5",
