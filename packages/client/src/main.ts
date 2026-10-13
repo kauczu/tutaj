@@ -26,10 +26,19 @@ interface DesktopBridge {
   setServer?(url: string): Promise<{ ok: boolean; error?: string }>;
   /** Game overlay (0.3.0+). */
   overlay?: {
-    get(): Promise<OverlaySettings & { displays: { id: number; label: string; width: number; height: number; primary: boolean }[] }>;
+    get(): Promise<
+      OverlaySettings & {
+        displays: { id: number; label: string; width: number; height: number; primary: boolean }[];
+        hotkeys: Record<'overlay' | 'mute', string>;
+      }
+    >;
     set(patch: Partial<OverlaySettings>): Promise<OverlaySettings>;
     resize(width: number, height: number): Promise<void>;
   };
+  /** Changes a global shortcut (Electron accelerator; null = default). */
+  setHotkey?(name: 'overlay' | 'mute', accelerator: string | null): Promise<{ ok: boolean; error?: string; hotkeys?: Record<'overlay' | 'mute', string> }>;
+  /** Suspends global shortcuts while a new one is being recorded. */
+  pauseHotkeys?(paused: boolean): Promise<void>;
   /** Enables the global shortcuts for the duration of a call. */
   setInCall?(inCall: boolean): Promise<void>;
   onHotkey?(cb: (name: 'overlay' | 'mute') => void): () => void;

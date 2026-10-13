@@ -27,16 +27,25 @@ function fakeDesktopBridge() {
     hotkey: null as ((name: string) => void) | null,
     settings: { enabled: false, corner: 'top-right', size: 'm', opacity: 0.85, display: null } as Record<string, unknown>,
   });
+  const defaults: Record<string, string> = { overlay: 'CommandOrControl+Shift+O', mute: 'CommandOrControl+Shift+M' };
+  let hotkeys = { ...defaults };
   (window as unknown as { tutaj: unknown }).tutaj = {
     isDesktop: true,
     info: async () => null,
     switchMode: async () => {},
     overlay: {
-      get: async () => ({ ...ov.settings, displays: [{ id: 1, label: 'Monitor', width: 1920, height: 1080, primary: true }] }),
+      get: async () => ({ ...ov.settings, hotkeys, displays: [{ id: 1, label: 'Monitor', width: 1920, height: 1080, primary: true }] }),
       set: async (patch: Record<string, unknown>) => ({ ...Object.assign(ov.settings, patch) }),
       resize: async (w: number, h: number) => void ov.calls.push(['resize', w, h]),
     },
     setInCall: async (on: boolean) => void ov.calls.push(['inCall', on]),
+    setHotkey: async (name: string, accelerator: string | null) => {
+      ov.calls.push(['setHotkey', name, accelerator]);
+      if (accelerator === 'Ctrl+Alt+T') return { ok: false, error: 'zajęty' };
+      hotkeys = { ...hotkeys, [name]: accelerator ?? defaults[name] };
+      return { ok: true, hotkeys };
+    },
+    pauseHotkeys: async (paused: boolean) => void ov.calls.push(['pause', paused]),
     onHotkey: (cb: (name: string) => void) => {
       ov.hotkey = cb;
       return () => (ov.hotkey = null);
@@ -100,4 +109,51 @@ test('game overlay: cameras of the others, muted badge, size reported to the app
   await ania.page.click('#btn-leave');
   // The page reloads to the lobby; the call ended with setInCall(false) before that.
   await expect(ania.page.locator('#join-form')).toBeVisible();
+});
+
+test('shortcuts can be redefined: recorded from a key press, validated, restored to defaults', async ({ browser }) => {
+  const ania = await Participant.open(browser, srv.url, 'skroty', 'Ania');
+  people.push(ania);
+  await ania.page.addInitScript(fakeDesktopBridge);
+  await ania.page.reload();
+  await ania.page.fill('#name', 'Ania');
+  await ania.submitJoin();
+  await expect(ania.page.locator('#room-view')).toBeVisible();
+  const page = ania.page;
+  const calls = () => page.evaluate(() => window.__ov.calls);
+
+  await page.click('#btn-settings');
+  await expect(page.locator('#hotkey-overlay')).toHaveText('Ctrl+Shift+O');
+  await expect(page.locator('#hotkey-mute')).toHaveText('Ctrl+Shift+M');
+
+  await page.click('#hotkey-mute');
+  await expect(page.locator('#hotkey-mute')).toContainText('Naciśnij skrót');
+  expect(await calls()).toContainEqual(['pause', true]);
+  // A plain letter would take typing keys from games: refused, still recording.
+  await page.keyboard.press('k');
+  await expect(page.locator('#overlay-settings .error')).toContainText('Użyj Ctrl, Alt lub Win');
+  // Esc cancels recording without closing the dialog.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#settings')).toHaveAttribute('open', '');
+  await expect(page.locator('#hotkey-mute')).toHaveText('Ctrl+Shift+M');
+  expect(await calls()).toContainEqual(['pause', false]);
+
+  await page.click('#hotkey-mute');
+  await page.keyboard.press('Control+Alt+K');
+  await expect(page.locator('#hotkey-mute')).toHaveText('Ctrl+Alt+K');
+  expect(await calls()).toContainEqual(['setHotkey', 'mute', 'Ctrl+Alt+K']);
+  // M in the room no longer matters while the dialog is open; F keys work alone.
+  await page.click('#hotkey-overlay');
+  await page.keyboard.press('F9');
+  await expect(page.locator('#hotkey-overlay')).toHaveText('F9');
+
+  // Taken by another program: the app refuses, the old shortcut stays.
+  await page.click('#hotkey-overlay');
+  await page.keyboard.press('Control+Alt+T');
+  await expect(page.locator('#overlay-settings .error')).toContainText('zajęty');
+  await expect(page.locator('#hotkey-overlay')).toHaveText('F9');
+
+  await page.getByRole('button', { name: 'Przywróć domyślne skróty' }).click();
+  await expect(page.locator('#hotkey-overlay')).toHaveText('Ctrl+Shift+O');
+  await expect(page.locator('#hotkey-mute')).toHaveText('Ctrl+Shift+M');
 });

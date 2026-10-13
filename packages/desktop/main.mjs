@@ -106,6 +106,7 @@ function loadSettings() {
     mode: mode === 'lan' ? 'lan' : 'remote',
     serverUrl: isAllowedServer(serverUrl) ? serverUrl : DEFAULT_SERVER,
     overlay: sanitizeOverlay(saved.overlay),
+    hotkeys: sanitizeHotkeys(saved.hotkeys),
   };
 }
 
@@ -312,7 +313,10 @@ function registerIpc() {
   ipcMain.handle('tutaj:switch-mode', guard((mode) => switchMode(mode)));
   ipcMain.handle('tutaj:set-server', guard((url) => setServer(url)));
   ipcMain.handle('tutaj:retry', guard(() => openServer()));
-  ipcMain.handle('tutaj:overlay-get', guard(() => ({ ...settings.overlay, displays: listDisplays() })));
+  ipcMain.handle('tutaj:overlay-get', guard(() => ({ ...settings.overlay, displays: listDisplays(), hotkeys: settings.hotkeys })));
+  ipcMain.handle('tutaj:hotkey-set', guard((name, accelerator) => setHotkey(name, accelerator)));
+  // While the user records a new shortcut, the current ones must not fire.
+  ipcMain.handle('tutaj:hotkeys-pause', guard((paused) => (paused === true ? unregisterHotkeys() : inCall && registerHotkeys())));
   ipcMain.handle('tutaj:overlay-set', guard((patch) => {
     settings.overlay = sanitizeOverlay({ ...settings.overlay, ...(patch && typeof patch === 'object' ? patch : {}) });
     saveSettings({ overlay: settings.overlay });
@@ -331,8 +335,6 @@ function registerIpc() {
 /** Window name the web client gives its overlay popup (`OVERLAY_WINDOW_NAME`). */
 const OVERLAY_NAME = 'tutaj-overlay';
 const OVERLAY_MARGIN = 24;
-/** Global shortcuts, active only during a call: they work while a game has focus. */
-const HOTKEYS = { overlay: 'CommandOrControl+Shift+O', mute: 'CommandOrControl+Shift+M' };
 
 let overlayWindow = null;
 let overlaySize = { width: 300, height: 200 };
@@ -423,14 +425,77 @@ const sendHotkey = (name) => mainWindow?.webContents.send('tutaj:hotkey', name);
 function setInCall(on) {
   if (on === inCall) return;
   inCall = on;
-  if (on) {
-    for (const [name, accelerator] of Object.entries(HOTKEYS)) {
-      if (!globalShortcut.register(accelerator, () => sendHotkey(name))) console.warn(`shortcut ${accelerator} is taken`);
-    }
-  } else {
-    for (const accelerator of Object.values(HOTKEYS)) globalShortcut.unregister(accelerator);
+  if (on) registerHotkeys();
+  else {
+    unregisterHotkeys();
     overlayWindow?.close();
   }
+}
+
+// --- Global shortcuts ---------------------------------------------------------------
+
+/** Global shortcuts, active only during a call: they work while a game has focus. */
+function defaultHotkeys() {
+  return { overlay: 'CommandOrControl+Shift+O', mute: 'CommandOrControl+Shift+M' };
+}
+
+function sanitizeHotkeys(h) {
+  const out = defaultHotkeys();
+  if (h && typeof h === 'object') {
+    for (const name of Object.keys(out)) {
+      if (isAccelerator(h[name])) out[name] = h[name];
+    }
+  }
+  return out;
+}
+
+/** Shape check only (Electron validates the rest when registering). */
+function isAccelerator(a) {
+  return typeof a === 'string' && a.length <= 64 && /^[A-Za-z0-9]+(\+[A-Za-z0-9`\-=[\];',./\\]+)*$/.test(a);
+}
+
+let registered = [];
+
+function registerHotkeys() {
+  unregisterHotkeys();
+  for (const [name, accelerator] of Object.entries(settings.hotkeys)) {
+    try {
+      if (globalShortcut.register(accelerator, () => sendHotkey(name))) registered.push(accelerator);
+      else console.warn(`shortcut ${accelerator} is taken`);
+    } catch (err) {
+      console.warn(`shortcut ${accelerator} is invalid`, err);
+    }
+  }
+}
+
+function unregisterHotkeys() {
+  for (const accelerator of registered) globalShortcut.unregister(accelerator);
+  registered = [];
+}
+
+const sameKey = (a, b) => a.toLowerCase().replace('commandorcontrol', 'ctrl').replace('control', 'ctrl') === b.toLowerCase().replace('commandorcontrol', 'ctrl').replace('control', 'ctrl');
+
+/** Changes one shortcut (null = default). Refused if invalid, a duplicate, or taken by another app. */
+function setHotkey(name, accelerator) {
+  if (!(name in settings.hotkeys)) return { ok: false, error: 'Nieznany skrót' };
+  const next = accelerator == null ? defaultHotkeys()[name] : accelerator;
+  if (!isAccelerator(next)) return { ok: false, error: 'Nieprawidłowy skrót' };
+  const other = Object.entries(settings.hotkeys).find(([n, a]) => n !== name && sameKey(a, next));
+  if (other) return { ok: false, error: 'Ten skrót jest już używany przez inną akcję' };
+  unregisterHotkeys();
+  let ok = false;
+  try {
+    ok = globalShortcut.register(next, () => {});
+    if (ok) globalShortcut.unregister(next);
+  } catch {
+    ok = false;
+  }
+  if (ok) {
+    settings.hotkeys = { ...settings.hotkeys, [name]: next };
+    saveSettings({ hotkeys: settings.hotkeys });
+  }
+  if (inCall) registerHotkeys();
+  return ok ? { ok: true, hotkeys: settings.hotkeys } : { ok: false, error: 'Ten skrót jest zajęty przez inny program albo nieobsługiwany' };
 }
 
 async function createWindow() {

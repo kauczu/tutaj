@@ -17,7 +17,11 @@ contextBridge.exposeInMainWorld('tutaj', {
     set: (patch) => ipcRenderer.invoke('tutaj:overlay-set', patch),
     resize: (width, height) => ipcRenderer.invoke('tutaj:overlay-resize', width, height),
   },
-  /** In a call: global shortcuts (Ctrl+Shift+O overlay, Ctrl+Shift+M mute) are active. */
+  /** Changes a global shortcut ('overlay' | 'mute') to an Electron accelerator; null = default. → { ok, error?, hotkeys? } */
+  setHotkey: (name, accelerator) => ipcRenderer.invoke('tutaj:hotkey-set', name, accelerator),
+  /** Suspends the global shortcuts while a new one is being recorded. */
+  pauseHotkeys: (paused) => ipcRenderer.invoke('tutaj:hotkeys-pause', paused),
+  /** In a call: global shortcuts (default Ctrl+Shift+O overlay, Ctrl+Shift+M mute) are active. */
   setInCall: (inCall) => ipcRenderer.invoke('tutaj:call-state', inCall),
   /** Global shortcut pressed: 'overlay' | 'mute'. Returns an unsubscribe function. */
   onHotkey: (cb) => {

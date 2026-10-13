@@ -12,6 +12,7 @@ import { ChatPanel, type TransferHandle } from './ui/chat';
 import { $, download, fillDeviceSelect, h } from './ui/dom';
 import { Grid, Tile } from './ui/grid';
 import { setIcon } from './ui/icons';
+import { acceleratorFromEvent, formatAccelerator, type HotkeyName } from './ui/hotkeys';
 import { GameOverlay, type OverlaySettings } from './ui/overlay';
 import { renderQualityForm } from './ui/quality-form';
 import { toast } from './ui/toast';
@@ -735,11 +736,85 @@ export class Room {
         'Krycie',
         select('overlay-opacity', String(current.opacity), [['1', '100%'], ['0.85', '85%'], ['0.7', '70%'], ['0.5', '50%']], (v) => void apply({ opacity: Number(v) })),
       ),
+      ...(bridge.setHotkey ? [this.hotkeyEditor(current.hotkeys)] : []),
       h('p', {
         class: 'muted small',
-        text: 'Skróty działające w grze: Ctrl+Shift+O — pokaż/ukryj nakładkę, Ctrl+Shift+M — wycisz mikrofon. Nakładka jest widoczna nad grami w trybie „pełny ekran w oknie” (bez ramek), nie w wyłącznym pełnym ekranie. Nie przechwytuje myszy ani klawiatury.',
+        text: 'Skróty działają także wtedy, gdy aktywna jest gra (tylko w trakcie rozmowy). Nakładka jest widoczna nad grami w trybie „pełny ekran w oknie” (bez ramek), nie w wyłącznym pełnym ekranie. Nie przechwytuje myszy ani klawiatury.',
       }),
     );
+  }
+
+  /** Global shortcuts: click a shortcut, press the new combination (Esc cancels). */
+  private hotkeyEditor(initial: Record<HotkeyName, string>): HTMLElement {
+    const bridge = window.tutaj!;
+    let hotkeys = initial;
+    const error = h('p', { class: 'error small' });
+    error.hidden = true;
+    const labels: [HotkeyName, string][] = [
+      ['overlay', 'Pokaż/ukryj nakładkę'],
+      ['mute', 'Wycisz/włącz mikrofon'],
+    ];
+    const buttons = new Map<HotkeyName, HTMLButtonElement>();
+    let stopRecording: (() => void) | null = null;
+    const showAll = () => {
+      for (const [name, b] of buttons) b.textContent = formatAccelerator(hotkeys[name]);
+    };
+    const save = async (name: HotkeyName, accelerator: string | null) => {
+      const res = await bridge.setHotkey!(name, accelerator);
+      if (res.ok && res.hotkeys) hotkeys = res.hotkeys;
+      error.textContent = res.ok ? '' : `${accelerator ? formatAccelerator(accelerator) : ''}: ${res.error ?? 'nie udało się zapisać'}`;
+      error.hidden = res.ok;
+      showAll();
+    };
+    const record = (name: HotkeyName, button: HTMLButtonElement) => {
+      stopRecording?.();
+      error.hidden = true;
+      button.textContent = 'Naciśnij skrót… (Esc — anuluj)';
+      button.classList.add('recording');
+      void bridge.pauseHotkeys?.(true);
+      const onKey = (e: KeyboardEvent) => {
+        e.preventDefault();
+        e.stopPropagation(); // Esc must not close the settings dialog
+        if (e.key === 'Escape') return stop();
+        const r = acceleratorFromEvent(e);
+        if (!r) return;
+        if ('error' in r) {
+          error.textContent = r.error;
+          error.hidden = false;
+          return;
+        }
+        stop();
+        void save(name, r.accelerator);
+      };
+      const stop = () => {
+        document.removeEventListener('keydown', onKey, true);
+        button.removeEventListener('blur', stop);
+        button.classList.remove('recording');
+        stopRecording = null;
+        void bridge.pauseHotkeys?.(false);
+        showAll();
+      };
+      document.addEventListener('keydown', onKey, true);
+      button.addEventListener('blur', stop);
+      stopRecording = stop;
+    };
+    const rows = labels.map(([name, text]) => {
+      const b = h('button', { class: 'ghost hotkey' });
+      b.type = 'button';
+      b.id = `hotkey-${name}`;
+      b.title = 'Kliknij i naciśnij nową kombinację klawiszy';
+      b.onclick = () => record(name, b);
+      buttons.set(name, b);
+      return h('div', { class: 'hotkey-row' }, h('span', { text }), b);
+    });
+    const reset = h('button', { class: 'ghost small', text: 'Przywróć domyślne skróty' });
+    reset.type = 'button';
+    reset.onclick = async () => {
+      stopRecording?.();
+      for (const [name] of labels) await save(name, null);
+    };
+    showAll();
+    return h('div', { class: 'hotkeys' }, h('span', { class: 'hotkeys-title', text: 'Skróty klawiszowe' }), ...rows, error, reset);
   }
 
   private async toggleMic(): Promise<void> {

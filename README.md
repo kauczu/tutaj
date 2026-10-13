@@ -227,14 +227,18 @@ przepływność jest ustawiana per nadawca (`RTCRtpSender.setParameters`), więc
 Małe kamery współgraczy w rogu ekranu, nad grą: nazwa, podświetlenie mówiącego, znacznik wyciszenia; osoba z wyłączoną
 kamerą zajmuje tylko wąski pasek. Gdy Twój mikrofon jest wyciszony, nad kafelkami świeci czerwony znacznik.
 
-- **skróty działające w grze** (aktywne tylko w trakcie rozmowy): **Ctrl+Shift+O** – pokaż/ukryj nakładkę,
-  **Ctrl+Shift+M** – wycisz/włącz mikrofon (krótki sygnał dźwiękowy potwierdza zmianę);
+- **skróty działające w grze** (aktywne tylko w trakcie rozmowy): domyślnie **Ctrl+Shift+O** – pokaż/ukryj nakładkę,
+  **Ctrl+Shift+M** – wycisz/włącz mikrofon (krótki sygnał dźwiękowy potwierdza zmianę). Można je zmienić w Ustawieniach:
+  kliknij skrót i naciśnij nową kombinację (Ctrl, Alt lub Win z klawiszem albo sam klawisz F1–F24; skrót zajęty przez
+  inny program jest odrzucany);
 - ustawienia (Ustawienia → Nakładka na grę): monitor, róg ekranu, rozmiar, krycie; zapamiętywane;
 - nakładka to osobne okno: przezroczyste, zawsze na wierzchu, **nie przechwytuje myszy ani klawiatury** i nigdy nie
   zabiera grze fokusu; okno ma dokładnie rozmiar swojej zawartości;
 - **nie ingeruje w proces gry** (żadnego wstrzykiwania do DirectX/Vulkan), więc nie koliduje z systemami anti-cheat;
   ceną jest to, że widać ją nad grami w trybie **„pełny ekran w oknie” (bez ramek)**, a nie w wyłącznym pełnym ekranie;
 - pokazuje te same strumienie co okno rozmowy (popup tej samej strony) – bez dodatkowego dekodowania i ruchu sieciowego.
+  Każdy strumień jest dekodowany raz, niezależnie od liczby okien, które go wyświetlają; samo rysowanie obrazu w oknie
+  rozmowy schowanym za grą to ok. 0,5% CPU (pomiar: 3 osoby).
 
 ## SFU: kiedy i jak
 
