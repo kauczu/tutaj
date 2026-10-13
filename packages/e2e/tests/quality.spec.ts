@@ -134,13 +134,22 @@ test('gaming profile with 3 people goes to the SFU right away, with studio audio
   await expect(ania.page.locator('#mode-badge')).toHaveText('SFU');
 });
 
-test('H.264 chosen explicitly is used over P2P', async ({ browser }) => {
+test('video codec is chosen per sender: H.264 on one side, VP8 on the other', async ({ browser }) => {
   srv = await startTestServer();
   // Codec choice only; 720p keeps software H.264 encoding light for the test machine.
   const h264 = { audio: 'voice', resolution: 720, uploadKbps: 0, codec: 'h264' };
+  // Ania joins first, so she answers Bartek's offer (which lists VP8 first) — and still sends H.264.
   const ania = await join('h264', 'Ania', browser, h264);
-  const bartek = await join('h264', 'Bartek', browser, h264);
+  const bartek = await join('h264', 'Bartek', browser);
   await bartek.expectVideoFrom('Ania');
-  expect((await mediaInfo(ania.page))[0].videoCodec).toBe('video/H264');
-  expect((await mediaInfo(bartek.page))[0].videoCodec).toBe('video/H264');
+  await ania.expectVideoFrom('Bartek');
+  await expect.poll(async () => (await mediaInfo(ania.page))[0].videoCodec).toBe('video/H264');
+  expect((await mediaInfo(bartek.page))[0].videoCodec).toBe('video/VP8');
+
+  // Switching the codec mid-call needs no renegotiation.
+  await ania.page.click('#btn-settings');
+  await ania.page.selectOption('#quality-room-codec', 'vp8');
+  await expect.poll(async () => (await mediaInfo(ania.page))[0].videoCodec).toBe('video/VP8');
+  await ania.page.getByRole('button', { name: 'Zamknij' }).click();
+  await bartek.expectVideoFrom('Ania');
 });

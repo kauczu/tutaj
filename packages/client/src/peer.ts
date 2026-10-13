@@ -1,7 +1,7 @@
 import type { IceServer, SignalData } from '@tutaj/shared';
 import type { LocalMedia } from './media';
 import type { PeerState } from './messages';
-import { codecOrder, tuneOpusSdp } from './quality';
+import { isH264, redFirst, tuneOpusSdp } from './quality';
 
 export type Quality = 'good' | 'fair' | 'poor' | 'unknown';
 
@@ -74,8 +74,8 @@ export class RemotePeer {
     private readonly cb: PeerCallbacks,
     /** False while the room uses the SFU: the connection then carries only DataChannels. */
     private mediaEnabled = true,
-    /** Put H.264 first (hardware encoding); takes effect at negotiation. */
-    private readonly h264 = false,
+    /** Encode video as H.264 (hardware encoder); see `setPreferH264`. */
+    private h264 = false,
   ) {
     this.state = { name, audio: false, video: false, screen: false, hand: false };
     this.pc = new RTCPeerConnection({ iceServers, bundlePolicy: 'max-bundle' });
@@ -187,6 +187,13 @@ export class RemotePeer {
     return this.mediaEnabled ? this.media.outgoingVideo : null;
   }
 
+  /** Switches our outgoing video codec between H.264 and the negotiated default, without renegotiation. */
+  async setPreferH264(on: boolean): Promise<void> {
+    if (this.h264 === on) return;
+    this.h264 = on;
+    await this.applyParams();
+  }
+
   /** Caps outgoing video bitrate — in a mesh our upload is shared by every peer. */
   async setMaxBitrate(bps: number): Promise<void> {
     this.maxBitrate = bps;
@@ -263,20 +270,15 @@ export class RemotePeer {
     this.sendLocalDescription();
   }
 
-  /** RED (redundant audio) survives packet loss without gaps; H.264 first when we encode in hardware. */
+  /** RED (redundant audio) first: a lost packet is recovered from the next one, without a gap. */
   private applyCodecOrder(): void {
-    const pairs: [RTCRtpTransceiver | null, 'audio' | 'video'][] = [
-      [this.audioTx, 'audio'],
-      [this.videoTx, 'video'],
-    ];
-    for (const [tx, kind] of pairs) {
-      const order = codecOrder(kind, this.h264);
-      if (!tx || !order || typeof tx.setCodecPreferences !== 'function') continue;
-      try {
-        tx.setCodecPreferences(order);
-      } catch (err) {
-        console.warn('setCodecPreferences failed', err);
-      }
+    const tx = this.audioTx;
+    const order = redFirst();
+    if (!tx || !order || typeof tx.setCodecPreferences !== 'function') return;
+    try {
+      tx.setCodecPreferences(order);
+    } catch (err) {
+      console.warn('setCodecPreferences failed', err);
     }
   }
 
@@ -303,24 +305,48 @@ export class RemotePeer {
     const video = this.media.sharingScreen ? 'maintain-resolution' : 'maintain-framerate';
     await Promise.all([
       this.tuneSender(this.audioTx?.sender, this.media.audioBitrate),
-      this.tuneSender(this.videoTx?.sender, this.maxBitrate, video),
+      this.tuneSender(this.videoTx?.sender, this.maxBitrate, video, this.h264),
     ]);
   }
 
-  private async tuneSender(sender: RTCRtpSender | undefined, maxBitrate: number, degradation?: RTCDegradationPreference): Promise<void> {
+  /**
+   * Applies bitrate, degradation preference and (for video) the codec. The codec is chosen per
+   * sender (`encodings[].codec`): each side encodes with what suits its own hardware, whatever
+   * the other side prefers. Engines without per-encoding codecs keep the negotiated default.
+   */
+  private async tuneSender(
+    sender: RTCRtpSender | undefined,
+    maxBitrate: number,
+    degradation?: RTCDegradationPreference,
+    h264?: boolean,
+  ): Promise<void> {
     if (!sender?.track || !maxBitrate) return;
     const params = sender.getParameters() as RTCRtpSendParameters & { degradationPreference?: RTCDegradationPreference };
     if (!params.encodings?.length) return; // not negotiated yet; re-applied on 'connected'
-    const enc = params.encodings[0];
-    if (enc.maxBitrate === maxBitrate && (!degradation || params.degradationPreference === degradation)) return;
+    const enc = params.encodings[0] as RTCRtpEncodingParameters & { codec?: RTCRtpCodec };
+    // H.264 when preferred; once overridden, back to another negotiated codec (VP8) when not.
+    const media = params.codecs?.filter((c) => !/\/(rtx|red|ulpfec|flexfec)/i.test(c.mimeType)) ?? [];
+    const found = h264
+      ? media.find((c) => isH264(c))
+      : enc.codec && /h264/i.test(enc.codec.mimeType)
+        ? media.find((c) => !/h264/i.test(c.mimeType))
+        : undefined;
+    const codec: RTCRtpCodec | undefined = found && { mimeType: found.mimeType, clockRate: found.clockRate, sdpFmtpLine: found.sdpFmtpLine };
+    const codecOk =
+      h264 === undefined || (codec ? enc.codec?.mimeType === codec.mimeType && enc.codec?.sdpFmtpLine === codec.sdpFmtpLine : true);
+    if (enc.maxBitrate === maxBitrate && (!degradation || params.degradationPreference === degradation) && codecOk) return;
     enc.maxBitrate = maxBitrate;
     if (degradation) params.degradationPreference = degradation;
-    try {
-      await sender.setParameters(params);
-    } catch (err) {
-      if (!degradation) return console.warn('setParameters failed', err);
-      delete params.degradationPreference; // older engines: bitrate alone
-      await sender.setParameters(params).catch((e) => console.warn('setParameters failed', e));
+    if (codec) enc.codec = codec;
+    for (const strip of [[], ['codec'], ['codec', 'degradationPreference']]) {
+      if (strip.includes('codec')) delete enc.codec;
+      if (strip.includes('degradationPreference')) delete params.degradationPreference;
+      try {
+        await sender.setParameters(params);
+        return;
+      } catch (err) {
+        if (strip.length === 2) console.warn('setParameters failed', err);
+      }
     }
   }
 }

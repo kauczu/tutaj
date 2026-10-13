@@ -66,26 +66,76 @@ export function profileOf(q: QualitySettings): ProfileId | null {
 /** High-quality settings make 3+ person rooms go through the SFU right away. */
 export const isHighQuality = (q: QualitySettings): boolean => q.audio === 'studio' || q.resolution === 1080;
 
-let hwH264: Promise<boolean> | null = null;
+/** true/false once known; null = not measurable yet (no camera/mic permission). */
+let hwH264: boolean | null = null;
+let probing: Promise<boolean | null> | null = null;
 
-/** Whether this machine encodes H.264 in hardware (GPU), which keeps the CPU free for the game. */
-export function hasHardwareH264(): Promise<boolean> {
-  hwH264 ??= (async () => {
-    try {
-      const info = await navigator.mediaCapabilities.encodingInfo({
-        type: 'webrtc',
-        video: { contentType: 'video/H264', width: 1920, height: 1080, bitrate: 4_000_000, framerate: 30 },
+/**
+ * Whether this machine encodes H.264 in hardware (GPU), which keeps the CPU free for the game.
+ *
+ * `mediaCapabilities.encodingInfo()` is no help here: Chromium reports `powerEfficient: false`
+ * even when it then encodes on NVENC/QuickSync. So we encode a second of video over a local
+ * connection and ask the encoder itself. Chromium reveals the encoder only to pages that capture
+ * camera or mic — before that the answer is null and the probe is repeated later.
+ */
+export async function hasHardwareH264(): Promise<boolean | null> {
+  if (hwH264 !== null) return hwH264;
+  probing ??= probeHardwareH264().then((r) => {
+    probing = null;
+    if (r !== null) hwH264 = r;
+    return r;
+  });
+  return probing;
+}
+
+async function probeHardwareH264(): Promise<boolean | null> {
+  const h264 = RTCRtpSender.getCapabilities?.('video')?.codecs.filter((c) => c.mimeType.toLowerCase() === 'video/h264');
+  if (!h264?.length) return false;
+  // Hardware encoders are skipped for tiny frames, so probe at 720p.
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280;
+  canvas.height = 720;
+  const ctx = canvas.getContext('2d');
+  if (!ctx || !canvas.captureStream) return null;
+  let frame = 0;
+  const draw = window.setInterval(() => {
+    ctx.fillStyle = `hsl(${(frame++ * 9) % 360} 70% 50%)`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }, 33);
+  const track = canvas.captureStream(30).getVideoTracks()[0];
+  const a = new RTCPeerConnection();
+  const b = new RTCPeerConnection();
+  try {
+    a.onicecandidate = (e) => e.candidate && void b.addIceCandidate(e.candidate).catch(() => {});
+    b.onicecandidate = (e) => e.candidate && void a.addIceCandidate(e.candidate).catch(() => {});
+    a.addTransceiver(track, { direction: 'sendonly' }).setCodecPreferences(h264);
+    await a.setLocalDescription();
+    await b.setRemoteDescription(a.localDescription!);
+    await b.setLocalDescription();
+    await a.setRemoteDescription(b.localDescription!);
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      let result: boolean | null | undefined;
+      (await a.getStats()).forEach((s) => {
+        if (s.type !== 'outbound-rtp' || !s.framesEncoded) return;
+        // Hidden (undefined) without capture permission.
+        result = typeof s.powerEfficientEncoder === 'boolean' ? s.powerEfficientEncoder : null;
       });
-      return info.supported && info.powerEfficient;
-    } catch {
-      return false;
+      if (result !== undefined) return result;
     }
-  })();
-  return hwH264;
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearInterval(draw);
+    track.stop();
+    a.close();
+    b.close();
+  }
 }
 
 export async function prefersH264(q: QualitySettings): Promise<boolean> {
-  return q.codec === 'h264' || (q.codec === 'auto' && (await hasHardwareH264()));
+  return q.codec === 'h264' || (q.codec === 'auto' && (await hasHardwareH264()) === true);
 }
 
 /**
@@ -114,22 +164,20 @@ export function tuneOpusSdp(sdp: string): string {
   return out;
 }
 
-/** Codec order for a transceiver: RED (redundant audio) before Opus; H.264 first for video when preferred. */
-export function codecOrder(kind: 'audio' | 'video', h264: boolean): RTCRtpCodec[] | null {
-  const caps = RTCRtpReceiver.getCapabilities?.(kind)?.codecs;
-  if (!caps?.length) return null;
-  const rank = (c: RTCRtpCodec): number => {
+/** Audio codec order with RED (redundant audio) before Opus, or null when RED is unavailable. */
+export function redFirst(): RTCRtpCodec[] | null {
+  const caps = RTCRtpReceiver.getCapabilities?.('audio')?.codecs;
+  if (!caps?.some((c) => c.mimeType.toLowerCase() === 'audio/red')) return null;
+  const rank = (c: RTCRtpCodec) => {
     const mime = c.mimeType.toLowerCase();
-    if (kind === 'audio') return mime === 'audio/red' ? 0 : mime === 'audio/opus' ? 1 : 2;
-    if (!h264) return 1;
-    if (mime !== 'video/h264') return 1;
-    // Packetization mode 1 is what hardware encoders and the SFU use.
-    return c.sdpFmtpLine?.includes('packetization-mode=1') ? 0 : 0.5;
+    return mime === 'audio/red' ? 0 : mime === 'audio/opus' ? 1 : 2;
   };
-  if (kind === 'audio' && !caps.some((c) => c.mimeType.toLowerCase() === 'audio/red')) return null;
-  if (kind === 'video' && !h264) return null;
   return [...caps].sort((a, b) => rank(a) - rank(b));
 }
+
+/** H.264 in packetization mode 1 — what hardware encoders and the SFU use. */
+export const isH264 = (c: { mimeType: string; sdpFmtpLine?: string }): boolean =>
+  c.mimeType.toLowerCase() === 'video/h264' && /packetization-mode=1/.test(c.sdpFmtpLine ?? '');
 
 /** Bitrate ceiling for a camera stream of the given height (what it needs to look sharp). */
 export function videoCap(height: number | undefined): number {

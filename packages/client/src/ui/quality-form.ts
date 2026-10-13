@@ -72,10 +72,22 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
   for (const el of [audio, resolution, upload, codec]) el.onchange = () => apply(read());
 
   const encoder = h('p', { class: 'muted small' });
-  void hasHardwareH264().then((hw) => {
-    encoder.textContent = hw
-      ? 'Wykryto sprzętowy koder H.264 — obraz koduje karta graficzna, procesor zostaje dla gry.'
-      : 'Nie wykryto sprzętowego kodera H.264 — obraz kodowany programowo.';
+  const checkEncoder = async () => {
+    const hw = await hasHardwareH264();
+    encoder.textContent =
+      hw === null
+        ? 'Sprawdzanie sprzętowego kodera H.264 — możliwe po włączeniu kamery lub mikrofonu.'
+        : hw
+          ? 'Wykryto sprzętowy koder H.264 — obraz koduje karta graficzna, procesor zostaje dla gry.'
+          : 'Nie wykryto sprzętowego kodera H.264 — obraz kodowany programowo.';
+    return hw;
+  };
+  // The encoder is only revealed once the page captures camera/mic: re-check when that starts.
+  void checkEncoder().then((hw) => {
+    if (hw !== null) return;
+    const off = media.on('change', () => {
+      void checkEncoder().then((r) => r !== null && off());
+    });
   });
 
   fill(q);

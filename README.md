@@ -196,7 +196,7 @@ id, a zdrowe połączenia zostają. Każde `RTCPeerConnection` ma `sid`, więc n
 ## Jakość i profil „Gra”
 
 Ustawienia jakości są w lobby („Urządzenia, jakość i ustawienia zaawansowane”) i w trakcie rozmowy (Ustawienia). Zmiany działają
-od razu, bez ponownego łączenia (poza kodowaniem obrazu, które obowiązuje od następnego połączenia).
+od razu, bez ponownego łączenia (w trybie SFU kodek obrazu zmienia się przy następnym przełączeniu trybu).
 
 | | Rozmowa (domyślny) | Gra |
 |---|---|---|
@@ -207,8 +207,10 @@ od razu, bez ponownego łączenia (poza kodowaniem obrazu, które obowiązuje od
 Wspólne dla obu profili:
 
 - **RED** (redundantne audio) w P2P i **FEC** Opusa – zgubiony pakiet nie powoduje dziury w dźwięku;
-- **kodowanie sprzętowe**: gdy karta graficzna koduje H.264 (wykrywane przez `mediaCapabilities`), obraz idzie w H.264
-  (procesor zostaje dla gry); można też wybrać H.264 lub VP8 ręcznie;
+- **kodowanie sprzętowe**: gdy karta graficzna koduje H.264, obraz idzie w H.264 (procesor zostaje dla gry); można też
+  wybrać H.264 lub VP8 ręcznie. Wykrywanie to krótka próba kodowania przez lokalne połączenie (Chromium zgłasza
+  `mediaCapabilities.powerEfficient = false` nawet przy działającym NVENC). Kodek wybiera każdy nadawca osobno
+  (`RTCRtpEncodingParameters.codec`), niezależnie od preferencji rozmówcy;
 - przy przeciążeniu kamera traci rozdzielczość, a nie płynność (`degradationPreference: maintain-framerate`);
 - w aplikacji desktopowej okno rozmowy w tle (za grą) nie jest spowalniane przez Chromium;
 - „Wysyłasz: …” w Ustawieniach pokazuje bieżącą rozdzielczość, kodek (sprzętowo/programowo) i przepływności.

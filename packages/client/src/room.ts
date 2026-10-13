@@ -547,7 +547,10 @@ export class Room {
   private onLocalMediaChange(): void {
     this.localTile.setStream(this.media.previewStream());
     this.speaking.watch(LOCAL_ID, this.media.audioTrack);
-    void prefersH264(this.media.quality).then((v) => (this.h264 = v));
+    void prefersH264(this.media.quality).then((v) => {
+      this.h264 = v;
+      for (const p of this.peers.values()) void p.setPreferH264(v);
+    });
     this.applyBitrate();
     for (const p of this.peers.values()) void p.updateTracks();
     void this.sfu?.updateTracks();
