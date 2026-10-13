@@ -11,4 +11,8 @@ contextBridge.exposeInMainWorld('tutaj', {
   setServer: (url) => ipcRenderer.invoke('tutaj:set-server', url),
   /** Reloads the server page (offline screen). */
   retry: () => ipcRenderer.invoke('tutaj:retry'),
+  /** { displays: [{ id, label, width, height, primary, current }], selected: id | null } */
+  displays: () => ipcRenderer.invoke('tutaj:displays'),
+  /** Monitor for the camera window; null = automatic (not the call window's monitor). */
+  setStageDisplay: (id) => ipcRenderer.invoke('tutaj:set-stage-display', id),
 });

@@ -23,6 +23,18 @@ interface DesktopBridge {
   switchMode(mode: 'remote' | 'lan'): Promise<void>;
   /** Saves another server address (empty = default) and restarts the app. */
   setServer?(url: string): Promise<{ ok: boolean; error?: string }>;
+  /** Monitors, and the one chosen for the camera window (null = automatic). */
+  displays?(): Promise<{ displays: DisplayInfo[]; selected: number | null }>;
+  setStageDisplay?(id: number | null): Promise<void>;
+}
+interface DisplayInfo {
+  id: number;
+  label: string;
+  width: number;
+  height: number;
+  primary: boolean;
+  /** The call window is on this monitor. */
+  current: boolean;
 }
 declare global {
   interface Window {
