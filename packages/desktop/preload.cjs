@@ -11,4 +11,18 @@ contextBridge.exposeInMainWorld('tutaj', {
   setServer: (url) => ipcRenderer.invoke('tutaj:set-server', url),
   /** Reloads the server page (offline screen). */
   retry: () => ipcRenderer.invoke('tutaj:retry'),
+  /** Game overlay: settings { enabled, corner, size, opacity, display, displays } and the size of its content. */
+  overlay: {
+    get: () => ipcRenderer.invoke('tutaj:overlay-get'),
+    set: (patch) => ipcRenderer.invoke('tutaj:overlay-set', patch),
+    resize: (width, height) => ipcRenderer.invoke('tutaj:overlay-resize', width, height),
+  },
+  /** In a call: global shortcuts (Ctrl+Shift+O overlay, Ctrl+Shift+M mute) are active. */
+  setInCall: (inCall) => ipcRenderer.invoke('tutaj:call-state', inCall),
+  /** Global shortcut pressed: 'overlay' | 'mute'. Returns an unsubscribe function. */
+  onHotkey: (cb) => {
+    const listener = (_e, name) => cb(name);
+    ipcRenderer.on('tutaj:hotkey', listener);
+    return () => ipcRenderer.removeListener('tutaj:hotkey', listener);
+  },
 });

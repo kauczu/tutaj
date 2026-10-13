@@ -33,6 +33,7 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - hasło pokoju, link z zaproszeniem, skróty klawiszowe (M, V, S, H, C)
 - **rozmowa przetrwa awarię serwera** – trwające połączenia P2P działają dalej, klient sam wraca i wznawia sesję
 - **hybryda P2P/SFU** – automatyczne przełączanie (lub ręczne: Ustawienia → Tryb mediów), simulcast, wskaźnik P2P/SFU na pasku
+- **nakładka na grę** (aplikacja desktopowa) – małe kamery współgraczy nad grą, skróty działające w grze
 - **profil jakości „Gra”** – dźwięk studyjny, kamera 1080p, sprzętowe kodowanie i limit wysyłania (zob. niżej)
 - PWA (instalowalna, działa offline jako „powłoka”), aplikacja desktopowa (Electron)
 
@@ -220,6 +221,20 @@ N−1 strumieni 1080p z jednego łącza to zbyt wiele dla typowego uploadu i dla
 
 Stereo i wysoki bitrate Opusa w P2P wymagają parametrów `stereo=1`/`maxaveragebitrate` w SDP (`tuneOpusSdp`); docelowa
 przepływność jest ustawiana per nadawca (`RTCRtpSender.setParameters`), więc zmienia się bez renegocjacji.
+
+### Nakładka na grę (aplikacja desktopowa)
+
+Małe kamery współgraczy w rogu ekranu, nad grą: nazwa, podświetlenie mówiącego, znacznik wyciszenia; osoba z wyłączoną
+kamerą zajmuje tylko wąski pasek. Gdy Twój mikrofon jest wyciszony, nad kafelkami świeci czerwony znacznik.
+
+- **skróty działające w grze** (aktywne tylko w trakcie rozmowy): **Ctrl+Shift+O** – pokaż/ukryj nakładkę,
+  **Ctrl+Shift+M** – wycisz/włącz mikrofon (krótki sygnał dźwiękowy potwierdza zmianę);
+- ustawienia (Ustawienia → Nakładka na grę): monitor, róg ekranu, rozmiar, krycie; zapamiętywane;
+- nakładka to osobne okno: przezroczyste, zawsze na wierzchu, **nie przechwytuje myszy ani klawiatury** i nigdy nie
+  zabiera grze fokusu; okno ma dokładnie rozmiar swojej zawartości;
+- **nie ingeruje w proces gry** (żadnego wstrzykiwania do DirectX/Vulkan), więc nie koliduje z systemami anti-cheat;
+  ceną jest to, że widać ją nad grami w trybie **„pełny ekran w oknie” (bez ramek)**, a nie w wyłącznym pełnym ekranie;
+- pokazuje te same strumienie co okno rozmowy (popup tej samej strony) – bez dodatkowego dekodowania i ruchu sieciowego.
 
 ## SFU: kiedy i jak
 

@@ -5,6 +5,7 @@ import { LocalMedia, describeMediaError } from './media';
 import { Room } from './room';
 import { signalingUrl } from './signaling';
 import { $, fillDeviceSelect } from './ui/dom';
+import type { OverlaySettings } from './ui/overlay';
 import { renderQualityForm } from './ui/quality-form';
 import { setIcon } from './ui/icons';
 
@@ -23,6 +24,15 @@ interface DesktopBridge {
   switchMode(mode: 'remote' | 'lan'): Promise<void>;
   /** Saves another server address (empty = default) and restarts the app. */
   setServer?(url: string): Promise<{ ok: boolean; error?: string }>;
+  /** Game overlay (0.3.0+). */
+  overlay?: {
+    get(): Promise<OverlaySettings & { displays: { id: number; label: string; width: number; height: number; primary: boolean }[] }>;
+    set(patch: Partial<OverlaySettings>): Promise<OverlaySettings>;
+    resize(width: number, height: number): Promise<void>;
+  };
+  /** Enables the global shortcuts for the duration of a call. */
+  setInCall?(inCall: boolean): Promise<void>;
+  onHotkey?(cb: (name: 'overlay' | 'mute') => void): () => void;
 }
 declare global {
   interface Window {

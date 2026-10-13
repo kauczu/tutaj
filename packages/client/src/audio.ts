@@ -7,6 +7,36 @@ interface Watched {
   lastLoud: number;
 }
 
+let cueCtx: AudioContext | null = null;
+
+/** Short tone confirming a mute toggle done by a global shortcut (the call window is hidden behind the game). */
+export function playCue(on: boolean): void {
+  try {
+    cueCtx ??= new AudioContext();
+    const ctx = cueCtx;
+    const t = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.15, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    // Rising for "on", falling for "muted".
+    const [a, b] = on ? [520, 780] : [780, 520];
+    for (const [freq, start] of [
+      [a, 0],
+      [b, 0.09],
+    ]) {
+      const osc = ctx.createOscillator();
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      osc.start(t + start);
+      osc.stop(t + start + 0.12);
+    }
+  } catch {
+    /* no audio output */
+  }
+}
+
 const THRESHOLD = 0.035;
 const HOLD_MS = 450;
 

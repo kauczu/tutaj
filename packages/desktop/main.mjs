@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, net, session, shell } from 'electron';
+import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, Menu, net, screen, session, shell } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -105,6 +105,7 @@ function loadSettings() {
   return {
     mode: mode === 'lan' ? 'lan' : 'remote',
     serverUrl: isAllowedServer(serverUrl) ? serverUrl : DEFAULT_SERVER,
+    overlay: sanitizeOverlay(saved.overlay),
   };
 }
 
@@ -311,6 +312,125 @@ function registerIpc() {
   ipcMain.handle('tutaj:switch-mode', guard((mode) => switchMode(mode)));
   ipcMain.handle('tutaj:set-server', guard((url) => setServer(url)));
   ipcMain.handle('tutaj:retry', guard(() => openServer()));
+  ipcMain.handle('tutaj:overlay-get', guard(() => ({ ...settings.overlay, displays: listDisplays() })));
+  ipcMain.handle('tutaj:overlay-set', guard((patch) => {
+    settings.overlay = sanitizeOverlay({ ...settings.overlay, ...(patch && typeof patch === 'object' ? patch : {}) });
+    saveSettings({ overlay: settings.overlay });
+    placeOverlay();
+    return settings.overlay;
+  }));
+  ipcMain.handle('tutaj:overlay-resize', guard((width, height) => {
+    overlaySize = { width: clampInt(width, 1, 1600), height: clampInt(height, 1, 2000) };
+    placeOverlay();
+  }));
+  ipcMain.handle('tutaj:call-state', guard((on) => setInCall(on === true)));
+}
+
+// --- Game overlay ----------------------------------------------------------------
+
+/** Window name the web client gives its overlay popup (`OVERLAY_WINDOW_NAME`). */
+const OVERLAY_NAME = 'tutaj-overlay';
+const OVERLAY_MARGIN = 24;
+/** Global shortcuts, active only during a call: they work while a game has focus. */
+const HOTKEYS = { overlay: 'CommandOrControl+Shift+O', mute: 'CommandOrControl+Shift+M' };
+
+let overlayWindow = null;
+let overlaySize = { width: 300, height: 200 };
+let inCall = false;
+
+const clampInt = (v, min, max) => Math.min(max, Math.max(min, Math.round(Number(v) || min)));
+
+function sanitizeOverlay(o) {
+  const v = o && typeof o === 'object' ? o : {};
+  return {
+    enabled: v.enabled === true,
+    corner: ['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(v.corner) ? v.corner : 'top-right',
+    size: ['s', 'm', 'l'].includes(v.size) ? v.size : 'm',
+    opacity: [1, 0.85, 0.7, 0.5].includes(v.opacity) ? v.opacity : 0.85,
+    /** Electron display id; null = primary monitor (where games usually run). */
+    display: Number.isSafeInteger(v.display) ? v.display : null,
+  };
+}
+
+function listDisplays() {
+  const primary = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().map((d) => ({
+    id: d.id,
+    label: d.label ?? '',
+    width: Math.round(d.size.width * d.scaleFactor),
+    height: Math.round(d.size.height * d.scaleFactor),
+    primary: d.id === primary,
+  }));
+}
+
+/** Puts the overlay in the chosen corner of the chosen monitor (whole screen: games cover the taskbar). */
+function placeOverlay() {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return;
+  const display = screen.getAllDisplays().find((d) => d.id === settings.overlay.display) ?? screen.getPrimaryDisplay();
+  const b = display.bounds;
+  const { width, height } = overlaySize;
+  const right = settings.overlay.corner.endsWith('right');
+  const bottom = settings.overlay.corner.startsWith('bottom');
+  overlayWindow.setBounds({
+    x: right ? b.x + b.width - width - OVERLAY_MARGIN : b.x + OVERLAY_MARGIN,
+    y: bottom ? b.y + b.height - height - OVERLAY_MARGIN : b.y + OVERLAY_MARGIN,
+    width,
+    height,
+  });
+}
+
+function overlayWindowOptions() {
+  return {
+    ...overlaySize,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    // Never takes focus or keyboard input from the game.
+    focusable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    title: 'Tutaj — nakładka',
+    webPreferences: { backgroundThrottling: false },
+  };
+}
+
+function adoptOverlayWindow(child) {
+  overlayWindow = child;
+  child.on('closed', () => {
+    if (overlayWindow === child) overlayWindow = null;
+  });
+  child.setMenu(null);
+  child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  child.webContents.on('will-navigate', (e) => e.preventDefault());
+  // Above fullscreen (borderless) games, and every click goes through to the game.
+  child.setAlwaysOnTop(true, 'screen-saver');
+  child.setIgnoreMouseEvents(true);
+  child.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  placeOverlay();
+  child.showInactive();
+}
+
+const sendHotkey = (name) => mainWindow?.webContents.send('tutaj:hotkey', name);
+
+/** Global shortcuts exist only during a call, so they don't take these keys from other apps otherwise. */
+function setInCall(on) {
+  if (on === inCall) return;
+  inCall = on;
+  if (on) {
+    for (const [name, accelerator] of Object.entries(HOTKEYS)) {
+      if (!globalShortcut.register(accelerator, () => sendHotkey(name))) console.warn(`shortcut ${accelerator} is taken`);
+    }
+  } else {
+    for (const accelerator of Object.values(HOTKEYS)) globalShortcut.unregister(accelerator);
+    overlayWindow?.close();
+  }
 }
 
 async function createWindow() {
@@ -346,9 +466,24 @@ async function createWindow() {
   });
 
   // Links (chat, invites, other sites) open in the system browser, never inside the app.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // The game overlay: a blank same-origin popup the call page fills with its video streams.
+    if (frameName === OVERLAY_NAME && url === 'about:blank' && isAppPage(mainWindow.webContents.getURL())) {
+      return { action: 'allow', overrideBrowserWindowOptions: overlayWindowOptions() };
+    }
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
+  });
+  mainWindow.webContents.on('did-create-window', (child, { frameName }) => {
+    if (frameName === OVERLAY_NAME) adoptOverlayWindow(child);
+  });
+  // Reload/navigation ends the call: drop its shortcuts and overlay.
+  mainWindow.webContents.on('did-start-navigation', (e) => {
+    if (e.isMainFrame && !e.isSameDocument) setInCall(false);
+  });
+  mainWindow.on('closed', () => {
+    setInCall(false);
+    overlayWindow?.close();
   });
   // Navigation and redirects may only stay on the verified Tutaj origin; anything else opens in the browser.
   const keepOnServer = (e, url) => {
@@ -391,6 +526,8 @@ app.whenReady().then(async () => {
   buildMenu();
   await createWindow();
 });
+
+app.on('will-quit', () => globalShortcut.unregisterAll());
 
 app.on('window-all-closed', async () => {
   await server?.close();

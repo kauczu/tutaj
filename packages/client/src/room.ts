@@ -1,5 +1,5 @@
 import type { IceServer, MediaMode, ModePreference, ModeReason, QualityReport, ServerMessage } from '@tutaj/shared';
-import { SpeakingDetector } from './audio';
+import { SpeakingDetector, playCue } from './audio';
 import { FileReceiver, MAX_FILE_SIZE, formatBytes, sendFile } from './files';
 import { LocalMedia, describeMediaError } from './media';
 import { parseAppMessage, type AppMessage, type PeerState } from './messages';
@@ -12,6 +12,7 @@ import { ChatPanel, type TransferHandle } from './ui/chat';
 import { $, download, fillDeviceSelect, h } from './ui/dom';
 import { Grid, Tile } from './ui/grid';
 import { setIcon } from './ui/icons';
+import { GameOverlay, type OverlaySettings } from './ui/overlay';
 import { renderQualityForm } from './ui/quality-form';
 import { toast } from './ui/toast';
 
@@ -121,6 +122,8 @@ export class Room {
   private readonly chat: ChatPanel;
   private readonly speaking: SpeakingDetector;
   private readonly recorder: CallRecorder;
+  /** Desktop app only. */
+  private overlay: GameOverlay | null = null;
   private readonly startedAt = Date.now();
   private readonly timers: number[] = [];
   private readonly cleanups: (() => void)[] = [];
@@ -162,6 +165,7 @@ export class Room {
     );
 
     this.cleanups.push(this.media.on('change', () => this.onLocalMediaChange()));
+    void this.initOverlay();
     this.bindControls();
     this.timers.push(window.setInterval(() => void this.pollStats(), 2000));
     this.timers.push(window.setInterval(() => this.updateClock(), 1000));
@@ -649,6 +653,95 @@ export class Room {
     setIcon($('btn-leave'), 'leave');
   }
 
+  // --- Game overlay (desktop app) ------------------------------------------------
+
+  /** Global shortcuts (also while a game has focus) and the overlay window, if the app supports them. */
+  private async initOverlay(): Promise<void> {
+    const bridge = window.tutaj;
+    if (!bridge?.overlay || !bridge.setInCall || !bridge.onHotkey) return;
+    const settings = await bridge.overlay.get().catch(() => null);
+    if (!settings || this.leaving) return;
+    this.overlay = new GameOverlay(this.grid, settings, (w, h) => void bridge.overlay!.resize(w, h));
+    await bridge.setInCall(true);
+    const off = bridge.onHotkey((name) => {
+      if (name === 'overlay') void this.setOverlay(!this.overlay?.isOpen);
+      else if (name === 'mute') void this.toggleMic().then(() => playCue(this.media.audioEnabled && !!this.media.audioTrack));
+    });
+    this.cleanups.push(off, () => {
+      this.overlay?.close();
+      void bridge.setInCall!(false);
+    });
+    if (settings.enabled) this.overlay.open();
+  }
+
+  private async setOverlay(on: boolean): Promise<void> {
+    const bridge = window.tutaj;
+    if (!this.overlay || !bridge?.overlay) return;
+    if (on) this.overlay.open();
+    else this.overlay.close();
+    await bridge.overlay.set({ enabled: on });
+    if ($<HTMLDialogElement>('settings').open) void this.renderOverlaySettings();
+  }
+
+  private async renderOverlaySettings(): Promise<void> {
+    const box = $('overlay-settings');
+    const bridge = window.tutaj;
+    const current = await bridge?.overlay?.get().catch(() => null);
+    box.hidden = !this.overlay || !current;
+    if (!this.overlay || !current || !bridge?.overlay) return;
+    const select = (id: string, value: string, options: [string, string][], onChange: (v: string) => void) => {
+      const el = h('select');
+      el.id = id;
+      for (const [v, text] of options) {
+        const o = h('option', { text });
+        o.value = v;
+        o.selected = v === value;
+        el.append(o);
+      }
+      el.onchange = () => onChange(el.value);
+      return el;
+    };
+    const apply = async (patch: Partial<OverlaySettings>) => {
+      const next = await bridge.overlay!.set(patch);
+      this.overlay?.update(next);
+    };
+    const show = h('input');
+    show.type = 'checkbox';
+    show.id = 'overlay-enabled';
+    show.checked = this.overlay.isOpen;
+    show.onchange = () => void this.setOverlay(show.checked);
+    const displays = current.displays.map((d, i): [string, string] => [
+      String(d.id),
+      `Ekran ${i + 1}: ${d.label || 'monitor'} — ${d.width}×${d.height}${d.primary ? ' (główny)' : ''}`,
+    ]);
+    const label = (text: string, control: HTMLElement) => h('label', {}, text, control);
+    box.replaceChildren(
+      h('legend', { text: 'Nakładka na grę' }),
+      h('label', { class: 'check' }, show, 'Pokaż nakładkę z kamerami nad grą'),
+      ...(displays.length > 1
+        ? [label('Monitor', select('overlay-display', String(current.display ?? ''), [['', 'Główny'], ...displays], (v) => void apply({ display: v ? Number(v) : null })))]
+        : []),
+      label(
+        'Położenie',
+        select('overlay-corner', current.corner, [
+          ['top-left', 'Lewy górny róg'],
+          ['top-right', 'Prawy górny róg'],
+          ['bottom-left', 'Lewy dolny róg'],
+          ['bottom-right', 'Prawy dolny róg'],
+        ], (v) => void apply({ corner: v as OverlaySettings['corner'] })),
+      ),
+      label('Rozmiar', select('overlay-size', current.size, [['s', 'Mały'], ['m', 'Średni'], ['l', 'Duży']], (v) => void apply({ size: v as OverlaySettings['size'] }))),
+      label(
+        'Krycie',
+        select('overlay-opacity', String(current.opacity), [['1', '100%'], ['0.85', '85%'], ['0.7', '70%'], ['0.5', '50%']], (v) => void apply({ opacity: Number(v) })),
+      ),
+      h('p', {
+        class: 'muted small',
+        text: 'Skróty działające w grze: Ctrl+Shift+O — pokaż/ukryj nakładkę, Ctrl+Shift+M — wycisz mikrofon. Nakładka jest widoczna nad grami w trybie „pełny ekran w oknie” (bez ramek), nie w wyłącznym pełnym ekranie. Nie przechwytuje myszy ani klawiatury.',
+      }),
+    );
+  }
+
   private async toggleMic(): Promise<void> {
     if (!this.media.audioTrack) {
       try {
@@ -749,6 +842,7 @@ export class Room {
       : 'Serwer nie ma włączonego SFU — media zawsze płyną P2P.';
     modeSelect.onchange = () => this.signaling.send({ type: 'set-mode', pref: modeSelect.value as ModePreference });
     renderQualityForm($('quality-room'), this.media, (msg) => toast(msg, 'error'));
+    void this.renderOverlaySettings();
     this.renderStats();
     dialog.showModal();
   }

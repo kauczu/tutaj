@@ -15,6 +15,9 @@ export class Tile {
   private readonly qualityEl: HTMLSpanElement;
   private readonly statusEl: HTMLDivElement;
   state: PeerState;
+  speaking = false;
+  /** Set by the grid: called whatever changes what the tile shows (mirrored by the stage window). */
+  onChange: () => void = () => {};
 
   constructor(readonly id: string, state: PeerState, readonly local: boolean) {
     this.state = state;
@@ -42,8 +45,15 @@ export class Tile {
   }
 
   setStream(stream: MediaStream): void {
-    if (this.video.srcObject !== stream) this.video.srcObject = stream;
+    if (this.video.srcObject !== stream) {
+      this.video.srcObject = stream;
+      this.onChange();
+    }
     void this.video.play().catch(() => {});
+  }
+
+  get stream(): MediaStream | null {
+    return this.video.srcObject instanceof MediaStream ? this.video.srcObject : null;
   }
 
   setState(state: PeerState): void {
@@ -57,6 +67,7 @@ export class Tile {
     this.el.classList.toggle('hand-up', state.hand);
     // Mirror our own camera (feels natural), but never a shared screen.
     this.el.classList.toggle('mirror', this.local && !state.screen);
+    this.onChange();
   }
 
   setStats(stats: PeerStats | null): void {
@@ -73,7 +84,11 @@ export class Tile {
   }
 
   setSpeaking(on: boolean): void {
-    this.el.classList.toggle('speaking', on && this.state.audio);
+    const speaking = on && this.state.audio;
+    if (speaking === this.speaking) return;
+    this.speaking = speaking;
+    this.el.classList.toggle('speaking', speaking);
+    this.onChange();
   }
 }
 
@@ -81,11 +96,29 @@ export class Tile {
 export class Grid {
   private tiles = new Map<string, Tile>();
   private pinned: string | null = null;
+  private listeners = new Set<() => void>();
+  private pending = false;
 
   constructor(private readonly el: HTMLElement) {}
 
+  /** Called (batched) when tiles are added/removed or a tile's stream, state or speaking changes. */
+  onChange(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private changed(): void {
+    if (this.pending || !this.listeners.size) return;
+    this.pending = true;
+    queueMicrotask(() => {
+      this.pending = false;
+      for (const fn of this.listeners) fn();
+    });
+  }
+
   add(tile: Tile): void {
     this.tiles.set(tile.id, tile);
+    tile.onChange = () => this.changed();
     tile.el.addEventListener('click', () => this.pin(this.pinned === tile.id ? null : tile.id));
     tile.el.addEventListener('dblclick', () => {
       if (document.fullscreenElement) void document.exitFullscreen();
@@ -93,6 +126,7 @@ export class Grid {
     });
     this.el.append(tile.el);
     this.layout();
+    this.changed();
   }
 
   remove(id: string): void {
@@ -100,6 +134,7 @@ export class Grid {
     this.tiles.delete(id);
     if (this.pinned === id) this.pinned = null;
     this.layout();
+    this.changed();
   }
 
   get(id: string): Tile | undefined {
