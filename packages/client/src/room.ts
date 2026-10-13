@@ -3,7 +3,8 @@ import { SpeakingDetector } from './audio';
 import { FileReceiver, MAX_FILE_SIZE, formatBytes, sendFile } from './files';
 import { LocalMedia, describeMediaError } from './media';
 import { parseAppMessage, type AppMessage, type PeerState } from './messages';
-import { RemotePeer } from './peer';
+import { RemotePeer, SendMeter, type SendStats } from './peer';
+import { MIN_VIDEO_BITRATE, SCREEN_BITRATE, isHighQuality, prefersH264, videoBudget, videoCap } from './quality';
 import { CallRecorder } from './recorder';
 import type { SfuSession } from './sfu';
 import { Signaling } from './signaling';
@@ -11,6 +12,7 @@ import { ChatPanel, type TransferHandle } from './ui/chat';
 import { $, download, fillDeviceSelect, h } from './ui/dom';
 import { Grid, Tile } from './ui/grid';
 import { setIcon } from './ui/icons';
+import { renderQualityForm } from './ui/quality-form';
 import { toast } from './ui/toast';
 
 export interface RoomOptions {
@@ -30,8 +32,6 @@ const CONNECT_TIMEOUT_MS = 25_000;
 /** How long a failed connection may stay down before its tile is dropped (when the peer is gone). */
 const PEER_GONE_MS = 15_000;
 const MAX_RECONNECTS = 10;
-/** Per-peer video bitrate cap by number of remote peers — our upload is split across the mesh. */
-const MESH_BITRATE = [1_500_000, 1_500_000, 1_000_000, 700_000];
 /** Quality reports to the server (mesh mode only), and how long connections must be up first. */
 const REPORT_INTERVAL_MS = 5_000;
 const REPORT_WARMUP_MS = 10_000;
@@ -43,6 +43,7 @@ const REASON_LABEL: Record<ModeReason, string> = {
   cpu: 'przeciążony procesor u jednej z osób',
   relay: 'połączenia przez serwer TURN',
   manual: 'wybór ręczny',
+  quality: 'wysoka jakość obrazu lub dźwięku',
   'sfu-unavailable': 'SFU niedostępne',
 };
 
@@ -105,9 +106,13 @@ export class Room {
   private pref: ModePreference = 'auto';
   private sfuAvailable = false;
   private sfu: SfuSession | null = null;
+  private sfuMeter = new SendMeter();
+  private sfuSend: SendStats | null = null;
   /** Whether mesh connections carry media (false once our SFU upstream is running). */
   private meshMedia = true;
   private lastReport = 0;
+  /** Prefer H.264 on new connections (hardware encoder available or chosen by the user). */
+  private h264 = false;
   private hand = false;
   private leaving = false;
   private readonly media: LocalMedia;
@@ -122,8 +127,10 @@ export class Room {
 
   /** Joins the room; throws (before any UI is shown) if the server rejects us. */
   static async join(opts: RoomOptions, onLeave: () => void): Promise<Room> {
+    const h264 = await prefersH264(opts.media.quality);
     const { signaling, welcome } = await connectAndJoin(opts);
     const room = new Room(opts, onLeave);
+    room.h264 = h264;
     room.attach(signaling, welcome);
     return room;
   }
@@ -343,7 +350,7 @@ export class Room {
           });
         }
       },
-    }, this.meshMedia);
+    }, this.meshMedia, this.h264);
 
     tile.setStatus('Łączenie…');
     watchdog(CONNECT_TIMEOUT_MS, () => {
@@ -373,8 +380,13 @@ export class Room {
     this.applyBitrate();
   }
 
+  /** Splits our video upload across the mesh: one stream per peer, within the upload limit. */
   private applyBitrate(): void {
-    const bps = MESH_BITRATE[Math.min(this.peers.size, MESH_BITRATE.length - 1)];
+    const n = Math.max(1, this.peers.size);
+    // RED roughly doubles the audio we send.
+    const budget = videoBudget(this.media.quality, n * this.media.audioBitrate * 2);
+    const cap = this.media.sharingScreen ? SCREEN_BITRATE : videoCap(this.media.outgoingVideo?.getSettings().height);
+    const bps = Math.max(MIN_VIDEO_BITRATE, Math.min(cap, Math.floor(budget / n)));
     for (const p of this.peers.values()) void p.setMaxBitrate(bps);
   }
 
@@ -440,7 +452,7 @@ export class Room {
         return;
       }
       if (this.mode !== 'sfu' || this.sfu || this.leaving) return; // superseded while loading
-      const session = new SfuSession((m, d) => this.signaling.request(m, d), this.media, this.iceServers);
+      const session = new SfuSession((m, d) => this.signaling.request(m, d), this.media, this.iceServers, this.h264);
       this.sfu = session;
       session.on('change', (id) => this.refreshTile(id));
       session.on('failed', (err) => this.onSfuFailure(session, err));
@@ -491,6 +503,13 @@ export class Room {
     if (!this.online || this.mode !== 'mesh' || !this.sfuAvailable || this.pref !== 'auto' || this.peers.size < 2) return;
     const now = Date.now();
     if (now - this.lastReport < REPORT_INTERVAL_MS) return;
+    const hq = isHighQuality(this.media.quality);
+    if (hq) {
+      // N−1 high-quality streams would saturate the uplink: no need to wait for measurements.
+      this.lastReport = now;
+      this.signaling.send({ type: 'quality', report: { bw: false, cpu: false, relayed: false, uplinkKbps: null, hq } });
+      return;
+    }
     const peers = [...this.peers.values()];
     // Skip while connections are new: bandwidth estimation reports "limited" during ramp-up.
     if (!peers.every((p) => p.healthy && now - (this.connectedAt.get(p.id) ?? now) >= REPORT_WARMUP_MS)) return;
@@ -528,6 +547,8 @@ export class Room {
   private onLocalMediaChange(): void {
     this.localTile.setStream(this.media.previewStream());
     this.speaking.watch(LOCAL_ID, this.media.audioTrack);
+    void prefersH264(this.media.quality).then((v) => (this.h264 = v));
+    this.applyBitrate();
     for (const p of this.peers.values()) void p.updateTracks();
     void this.sfu?.updateTracks();
     this.broadcastState();
@@ -724,6 +745,7 @@ export class Room {
       ? `Teraz: ${this.mode === 'sfu' ? 'SFU' : 'P2P'}. Tryb automatyczny przełącza na SFU przy 3+ osobach, gdy łącze lub procesor nie nadąża.`
       : 'Serwer nie ma włączonego SFU — media zawsze płyną P2P.';
     modeSelect.onchange = () => this.signaling.send({ type: 'set-mode', pref: modeSelect.value as ModePreference });
+    renderQualityForm($('quality-room'), this.media, (msg) => toast(msg, 'error'));
     this.renderStats();
     dialog.showModal();
   }
@@ -735,11 +757,34 @@ export class Room {
         this.grid.get(p.id)?.setStats(stats);
       }),
     );
+    const report = await this.sfu?.sendStats().catch(() => null);
+    this.sfuSend = report ? this.sfuMeter.sample(report) : null;
     this.sendQualityReport();
     if ($<HTMLDialogElement>('settings').open) this.renderStats();
   }
 
+  /** "What am I sending": resolution, codec/encoder and bitrates, for checking quality during a game. */
+  private renderSendSummary(): void {
+    const list = (this.mode === 'sfu' ? [this.sfuSend] : [...this.peers.values()].map((p) => p.stats?.send ?? null)).filter(
+      (s): s is SendStats => !!s,
+    );
+    const el = $('send-stats');
+    el.hidden = list.length === 0;
+    if (!list.length) return;
+    const s = list[0];
+    const video = list.reduce((sum, x) => sum + x.videoKbps, 0);
+    const audio = list.reduce((sum, x) => sum + x.audioKbps, 0);
+    const rate = (kbps: number) => (kbps >= 1000 ? `${(kbps / 1000).toLocaleString('pl-PL', { maximumFractionDigits: 1 })} Mb/s` : `${kbps} kb/s`);
+    const parts: string[] = [];
+    if (s.resolution) parts.push(`${s.resolution}${s.fps ? ` @ ${s.fps} kl/s` : ''}`);
+    if (s.codec) parts.push(`${s.codec}${s.hardware === true ? ' (sprzętowo)' : s.hardware === false ? ' (programowo)' : ''}`);
+    if (s.resolution) parts.push(`obraz ${rate(video)}`);
+    if (s.audioChannels) parts.push(`dźwięk ${s.audioChannels === 2 ? 'stereo' : 'mono'} ${rate(audio)}`);
+    el.textContent = `Wysyłasz: ${parts.join(' · ')}`;
+  }
+
   private renderStats(): void {
+    this.renderSendSummary();
     const box = $('peer-stats');
     if (this.peers.size === 0) {
       box.replaceChildren(h('p', { class: 'muted', text: 'Brak innych uczestników.' }));

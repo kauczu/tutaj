@@ -1,6 +1,7 @@
 import type { IceServer, SignalData } from '@tutaj/shared';
 import type { LocalMedia } from './media';
 import type { PeerState } from './messages';
+import { codecOrder, tuneOpusSdp } from './quality';
 
 export type Quality = 'good' | 'fair' | 'poor' | 'unknown';
 
@@ -13,6 +14,20 @@ export interface PeerStats {
   /** Why outgoing video is being degraded (WebRTC `qualityLimitationReason`). */
   limitation: 'none' | 'bandwidth' | 'cpu' | 'other';
   quality: Quality;
+  /** What we send on this connection (null until media flows). */
+  send: SendStats | null;
+}
+
+export interface SendStats {
+  videoKbps: number;
+  audioKbps: number;
+  /** e.g. "1920×1080" */
+  resolution: string | null;
+  fps: number | null;
+  codec: string | null;
+  /** Video encoded on the GPU (hardware encoder). */
+  hardware: boolean | null;
+  audioChannels: number | null;
 }
 
 export interface PeerCallbacks {
@@ -47,6 +62,7 @@ export class RemotePeer {
   private videoTx: RTCRtpTransceiver | null = null;
   private ops: Promise<void> = Promise.resolve();
   private prev = { lost: 0, received: 0, bytesIn: 0, at: 0 };
+  private readonly sendMeter = new SendMeter();
   private maxBitrate = 0;
 
   constructor(
@@ -58,6 +74,8 @@ export class RemotePeer {
     private readonly cb: PeerCallbacks,
     /** False while the room uses the SFU: the connection then carries only DataChannels. */
     private mediaEnabled = true,
+    /** Put H.264 first (hardware encoding); takes effect at negotiation. */
+    private readonly h264 = false,
   ) {
     this.state = { name, audio: false, video: false, screen: false, hand: false };
     this.pc = new RTCPeerConnection({ iceServers, bundlePolicy: 'max-bundle' });
@@ -80,6 +98,7 @@ export class RemotePeer {
     if (initiator) {
       this.audioTx = this.pc.addTransceiver(this.outAudio ?? 'audio', { direction: 'sendrecv' });
       this.videoTx = this.pc.addTransceiver(this.outVideo ?? 'video', { direction: 'sendrecv' });
+      this.applyCodecOrder();
     }
 
     this.pc.ontrack = (e) => {
@@ -104,7 +123,7 @@ export class RemotePeer {
     this.pc.onconnectionstatechange = () => {
       const s = this.pc.connectionState;
       if (s === 'failed' && this.initiator) this.pc.restartIce();
-      if (s === 'connected') this.applyBitrate();
+      if (s === 'connected') void this.applyParams();
       cb.connectionState(s);
     };
   }
@@ -126,12 +145,13 @@ export class RemotePeer {
         const desc = data.description;
         if (desc.type === 'offer') {
           if (this.initiator) return; // never happens by design; ignore rather than glare
-          await this.pc.setRemoteDescription(desc);
+          await this.pc.setRemoteDescription({ type: 'offer', sdp: tuneOpusSdp(desc.sdp) });
           await this.attachAnswererTracks();
-          await this.pc.setLocalDescription();
+          const answer = await this.pc.createAnswer();
+          await this.pc.setLocalDescription({ type: 'answer', sdp: tuneOpusSdp(answer.sdp ?? '') });
           this.sendLocalDescription();
         } else if (this.pc.signalingState === 'have-local-offer') {
-          await this.pc.setRemoteDescription(desc);
+          await this.pc.setRemoteDescription({ type: 'answer', sdp: tuneOpusSdp(desc.sdp) });
         }
       } else {
         try {
@@ -150,7 +170,7 @@ export class RemotePeer {
   /** Pushes the current local tracks to the remote side (no renegotiation). */
   async updateTracks(): Promise<void> {
     await Promise.all([this.audioTx?.sender.replaceTrack(this.outAudio), this.videoTx?.sender.replaceTrack(this.outVideo)]);
-    await this.applyBitrate();
+    await this.applyParams();
   }
 
   /** Stops or resumes sending media on this connection; DataChannels stay up either way. */
@@ -170,7 +190,7 @@ export class RemotePeer {
   /** Caps outgoing video bitrate — in a mesh our upload is shared by every peer. */
   async setMaxBitrate(bps: number): Promise<void> {
     this.maxBitrate = bps;
-    await this.applyBitrate();
+    await this.applyParams();
   }
 
   sendApp(msg: unknown): boolean {
@@ -208,7 +228,8 @@ export class RemotePeer {
     const dLost = Math.max(0, lost - this.prev.lost);
     const dRecv = Math.max(0, received - this.prev.received);
     const dt = this.prev.at ? (now - this.prev.at) / 1000 : 0;
-    const inKbps = dt > 0 ? Math.max(0, ((bytesIn - this.prev.bytesIn) * 8) / 1000 / dt) : 0;
+    const inKbps = dt > 0 ? Math.max(0, Math.round(((bytesIn - this.prev.bytesIn) * 8) / 1000 / dt)) : 0;
+    const send = this.mediaEnabled ? this.sendMeter.sample(report) : null;
     this.prev = { lost, received, bytesIn, at: now };
 
     const rttMs = typeof pair?.currentRoundTripTime === 'number' ? Math.round(pair.currentRoundTripTime * 1000) : null;
@@ -222,7 +243,7 @@ export class RemotePeer {
       if (lossPct > 3 || (rttMs ?? 0) > 250) quality = 'fair';
       if (lossPct > 8 || (rttMs ?? 0) > 500) quality = 'poor';
     }
-    this.stats = { rttMs, lossPct, outKbps, inKbps: Math.round(inKbps), relayed: local?.candidateType === 'relay', limitation, quality };
+    this.stats = { rttMs, lossPct, outKbps, inKbps, relayed: local?.candidateType === 'relay', limitation, quality, send };
     return this.stats;
   }
 
@@ -237,8 +258,26 @@ export class RemotePeer {
   }
 
   private async sendOffer(): Promise<void> {
-    await this.pc.setLocalDescription();
+    const offer = await this.pc.createOffer();
+    await this.pc.setLocalDescription({ type: 'offer', sdp: tuneOpusSdp(offer.sdp ?? '') });
     this.sendLocalDescription();
+  }
+
+  /** RED (redundant audio) survives packet loss without gaps; H.264 first when we encode in hardware. */
+  private applyCodecOrder(): void {
+    const pairs: [RTCRtpTransceiver | null, 'audio' | 'video'][] = [
+      [this.audioTx, 'audio'],
+      [this.videoTx, 'video'],
+    ];
+    for (const [tx, kind] of pairs) {
+      const order = codecOrder(kind, this.h264);
+      if (!tx || !order || typeof tx.setCodecPreferences !== 'function') continue;
+      try {
+        tx.setCodecPreferences(order);
+      } catch (err) {
+        console.warn('setCodecPreferences failed', err);
+      }
+    }
   }
 
   private sendLocalDescription(): void {
@@ -255,21 +294,84 @@ export class RemotePeer {
       else continue;
       t.direction = 'sendrecv';
     }
+    this.applyCodecOrder();
     await Promise.all([this.audioTx?.sender.replaceTrack(this.outAudio), this.videoTx?.sender.replaceTrack(this.outVideo)]);
   }
 
-  private async applyBitrate(): Promise<void> {
-    const sender = this.videoTx?.sender;
-    if (!sender || !this.maxBitrate) return;
-    const params = sender.getParameters();
+  /** Outgoing bitrates (audio quality, our share of the upload) and what to give up first under load. */
+  private async applyParams(): Promise<void> {
+    const video = this.media.sharingScreen ? 'maintain-resolution' : 'maintain-framerate';
+    await Promise.all([
+      this.tuneSender(this.audioTx?.sender, this.media.audioBitrate),
+      this.tuneSender(this.videoTx?.sender, this.maxBitrate, video),
+    ]);
+  }
+
+  private async tuneSender(sender: RTCRtpSender | undefined, maxBitrate: number, degradation?: RTCDegradationPreference): Promise<void> {
+    if (!sender?.track || !maxBitrate) return;
+    const params = sender.getParameters() as RTCRtpSendParameters & { degradationPreference?: RTCDegradationPreference };
     if (!params.encodings?.length) return; // not negotiated yet; re-applied on 'connected'
-    const target = this.media.sharingScreen ? Math.round(this.maxBitrate * 1.5) : this.maxBitrate;
-    if (params.encodings[0].maxBitrate === target) return;
-    params.encodings[0].maxBitrate = target;
+    const enc = params.encodings[0];
+    if (enc.maxBitrate === maxBitrate && (!degradation || params.degradationPreference === degradation)) return;
+    enc.maxBitrate = maxBitrate;
+    if (degradation) params.degradationPreference = degradation;
     try {
       await sender.setParameters(params);
     } catch (err) {
-      console.warn('setParameters failed', err);
+      if (!degradation) return console.warn('setParameters failed', err);
+      delete params.degradationPreference; // older engines: bitrate alone
+      await sender.setParameters(params).catch((e) => console.warn('setParameters failed', e));
     }
   }
+}
+
+/** Turns successive stats reports into what we are sending: bitrates, resolution, codec, encoder. */
+export class SendMeter {
+  private prev = { video: 0, audio: 0, at: 0 };
+
+  sample(report: RTCStatsReport): SendStats | null {
+    let video = 0;
+    let audio = 0;
+    let top: any; // highest simulcast layer
+    let outAudio: any;
+    report.forEach((s) => {
+      if (s.type !== 'outbound-rtp') return;
+      if (s.kind === 'video') {
+        video += s.bytesSent ?? 0;
+        if (!top || (s.frameWidth ?? 0) > (top.frameWidth ?? 0)) top = s;
+      } else if (s.kind === 'audio') {
+        audio += s.bytesSent ?? 0;
+        outAudio = s;
+      }
+    });
+    const now = performance.now();
+    const dt = this.prev.at ? (now - this.prev.at) / 1000 : 0;
+    const kbps = (bytes: number, before: number) => (dt > 0 ? Math.max(0, Math.round(((bytes - before) * 8) / 1000 / dt)) : 0);
+    const result: SendStats | null =
+      top || outAudio
+        ? {
+            videoKbps: kbps(video, this.prev.video),
+            audioKbps: kbps(audio, this.prev.audio),
+            resolution: top?.frameWidth ? `${top.frameWidth}×${top.frameHeight}` : null,
+            fps: typeof top?.framesPerSecond === 'number' ? Math.round(top.framesPerSecond) : null,
+            codec: codecName(report, top?.codecId),
+            hardware: typeof top?.powerEfficientEncoder === 'boolean' ? top.powerEfficientEncoder : null,
+            audioChannels: audioChannels(report, outAudio?.codecId),
+          }
+        : null;
+    this.prev = { video, audio, at: now };
+    return result;
+  }
+}
+
+function codecName(report: RTCStatsReport, id: string | undefined): string | null {
+  const c = id ? report.get(id) : undefined;
+  return c?.mimeType ? String(c.mimeType).replace(/^(video|audio)\//, '') : null;
+}
+
+/** Stereo is negotiated per codec (`stereo=1`); RED wraps Opus, so look at either. */
+function audioChannels(report: RTCStatsReport, id: string | undefined): number | null {
+  const c = id ? report.get(id) : undefined;
+  if (!c) return null;
+  return /stereo=1/.test(c.sdpFmtpLine ?? '') || c.channels === 2 ? 2 : 1;
 }

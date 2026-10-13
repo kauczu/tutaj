@@ -1,12 +1,23 @@
 import { Emitter } from './emitter';
+import { AUDIO_BITRATE, loadQuality, saveQuality, type QualitySettings } from './quality';
 
 type MediaEvents = {
   /** Outgoing audio or video track changed (device switch, camera toggle, screen share). */
   change: void;
 };
 
-const AUDIO: MediaTrackConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-const VIDEO: MediaTrackConstraints = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } };
+/** Voice: browser processing on. Studio: raw stereo signal — needs headphones (no echo cancellation). */
+function audioConstraints(q: QualitySettings): MediaTrackConstraints {
+  return q.audio === 'studio'
+    ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } }
+    : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+}
+
+function videoConstraints(q: QualitySettings): MediaTrackConstraints {
+  return q.resolution === 1080
+    ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } }
+    : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } };
+}
 
 const withDevice = (base: MediaTrackConstraints, deviceId?: string): MediaTrackConstraints =>
   deviceId ? { ...base, deviceId: { exact: deviceId } } : base;
@@ -36,6 +47,21 @@ export class LocalMedia extends Emitter<MediaEvents> {
   videoDeviceId: string | undefined;
   /** Mic mute is done via track.enabled so unmuting is instant. */
   audioEnabled = true;
+  quality: QualitySettings = loadQuality();
+
+  get audioBitrate(): number {
+    return AUDIO_BITRATE[this.quality.audio];
+  }
+
+  /** Applies new quality settings, re-opening the mic/camera when their capture settings change. */
+  async setQuality(q: QualitySettings): Promise<void> {
+    const prev = this.quality;
+    this.quality = q;
+    saveQuality(q);
+    if (this.audioTrack && prev.audio !== q.audio) await this.setMicrophone(this.audioDeviceId);
+    if (this.cameraTrack && prev.resolution !== q.resolution) await this.setCamera(true);
+    this.emit('change', undefined);
+  }
 
   get outgoingAudio(): MediaStreamTrack | null {
     return this.audioTrack;
@@ -82,7 +108,7 @@ export class LocalMedia extends Emitter<MediaEvents> {
   }
 
   async setMicrophone(deviceId?: string): Promise<void> {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: withDevice(AUDIO, deviceId) });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: withDevice(audioConstraints(this.quality), deviceId) });
     const track = stream.getAudioTracks()[0];
     this.audioTrack?.stop();
     track.enabled = this.audioEnabled;
@@ -104,7 +130,7 @@ export class LocalMedia extends Emitter<MediaEvents> {
       this.emit('change', undefined);
       return;
     }
-    const stream = await navigator.mediaDevices.getUserMedia({ video: withDevice(VIDEO, deviceId) });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: withDevice(videoConstraints(this.quality), deviceId) });
     const track = stream.getVideoTracks()[0];
     this.cameraTrack?.stop();
     this.cameraTrack = track;

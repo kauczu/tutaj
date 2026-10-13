@@ -33,6 +33,7 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - hasło pokoju, link z zaproszeniem, skróty klawiszowe (M, V, S, H, C)
 - **rozmowa przetrwa awarię serwera** – trwające połączenia P2P działają dalej, klient sam wraca i wznawia sesję
 - **hybryda P2P/SFU** – automatyczne przełączanie (lub ręczne: Ustawienia → Tryb mediów), simulcast, wskaźnik P2P/SFU na pasku
+- **profil jakości „Gra”** – dźwięk studyjny, kamera 1080p, sprzętowe kodowanie i limit wysyłania (zob. niżej)
 - PWA (instalowalna, działa offline jako „powłoka”), aplikacja desktopowa (Electron)
 
 ## Szybki start (dev)
@@ -192,6 +193,32 @@ osób (1,5 → 1,0 → 0,7 Mb/s).
 **Odporność**: utrata WebSocketu nie zrywa P2P. Klient łączy się ponownie z tokenem wznowienia (HMAC id+pokój), dostaje to samo
 id, a zdrowe połączenia zostają. Każde `RTCPeerConnection` ma `sid`, więc nową sesję drugiej strony da się odróżnić od starej.
 
+## Jakość i profil „Gra”
+
+Ustawienia jakości są w lobby („Urządzenia, jakość i ustawienia zaawansowane”) i w trakcie rozmowy (Ustawienia). Zmiany działają
+od razu, bez ponownego łączenia (poza kodowaniem obrazu, które obowiązuje od następnego połączenia).
+
+| | Rozmowa (domyślny) | Gra |
+|---|---|---|
+| Dźwięk | Opus 64 kb/s, redukcja echa, szumów i automatyczne wzmocnienie | **studyjny**: Opus stereo 160 kb/s, bez filtrów – wymaga słuchawek |
+| Kamera | 720p, 30 kl/s | 1080p, 30 kl/s (jeśli kamera pozwala) |
+| Limit wysyłania | brak (decyduje estymacja pasma) | 4 Mb/s – rozmowa nie zapcha łącza i nie podniesie pingu w grze |
+
+Wspólne dla obu profili:
+
+- **RED** (redundantne audio) w P2P i **FEC** Opusa – zgubiony pakiet nie powoduje dziury w dźwięku;
+- **kodowanie sprzętowe**: gdy karta graficzna koduje H.264 (wykrywane przez `mediaCapabilities`), obraz idzie w H.264
+  (procesor zostaje dla gry); można też wybrać H.264 lub VP8 ręcznie;
+- przy przeciążeniu kamera traci rozdzielczość, a nie płynność (`degradationPreference: maintain-framerate`);
+- w aplikacji desktopowej okno rozmowy w tle (za grą) nie jest spowalniane przez Chromium;
+- „Wysyłasz: …” w Ustawieniach pokazuje bieżącą rozdzielczość, kodek (sprzętowo/programowo) i przepływności.
+
+Gdy ktoś wysyła w wysokiej jakości (dźwięk studyjny lub 1080p), pokój z ≥3 osobami od razu przechodzi na SFU –
+N−1 strumieni 1080p z jednego łącza to zbyt wiele dla typowego uploadu i dla pingu w grze.
+
+Stereo i wysoki bitrate Opusa w P2P wymagają parametrów `stereo=1`/`maxaveragebitrate` w SDP (`tuneOpusSdp`); docelowa
+przepływność jest ustawiana per nadawca (`RTCRtpSender.setParameters`), więc zmienia się bez renegocjacji.
+
 ## SFU: kiedy i jak
 
 Mesh jest optymalny dla 2 osób (i zwykle 3). Serwer (`policy.ts`) przełącza pokój na SFU w trybie **automatycznym**, gdy są ≥3 osoby i:
@@ -199,7 +226,8 @@ Mesh jest optymalny dla 2 osób (i zwykle 3). Serwer (`policy.ts`) przełącza p
 - ktoś przez ~15 s ma ograniczone wysyłanie wideo przez łącze (`qualityLimitationReason = bandwidth`) albo jego szacowany upload
   jest mniejszy niż (N−1) × 350 kb/s,
 - ktoś ma przeciążony procesor (`qualityLimitationReason = cpu`),
-- połączenia mesh idą przez TURN (SFU odciąża wtedy i klienta, i przekaźnik).
+- połączenia mesh idą przez TURN (SFU odciąża wtedy i klienta, i przekaźnik),
+- ktoś wysyła w wysokiej jakości (profil „Gra”) – wtedy bez czekania.
 
 Raporty jakości klienci wysyłają co 5 s (tylko w trybie mesh, po 10 s „rozgrzewki” połączeń). Na SFU pokój zostaje, dopóki są
 ≥3 osoby (bez „migotania”), i wraca do P2P przy 2. Każdy może też wybrać tryb ręcznie: Auto / P2P / SFU.
@@ -210,7 +238,8 @@ Połączenia mesh zostają otwarte jako kanały danych – czat i pliki nadal id
 wznawiane przed zamknięciem SFU. Jeśli serwer (a więc SFU) zniknie, klienci natychmiast wracają do P2P.
 
 **SFU w szczegółach**: jeden worker mediasoup, jeden `WebRtcServer` (wszystkie media na jednym porcie UDP+TCP), router na pokój,
-simulcast kamery (3 warstwy od 540p, 2 poniżej – SFU wybiera warstwę dla każdego odbiorcy), Opus z DTX/FEC.
+simulcast kamery (3 warstwy od 540p, 2 poniżej – SFU wybiera warstwę dla każdego odbiorcy, suma mieści się w limicie wysyłania),
+Opus stereo z FEC.
 Moduł `mediasoup-client` jest ładowany leniwie – pobiera się dopiero, gdy pokój użyje SFU.
 
 ## Wygląd

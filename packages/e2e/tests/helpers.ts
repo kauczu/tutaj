@@ -96,11 +96,12 @@ export class Participant {
     readonly name: string,
   ) {}
 
-  /** Opens the lobby in a fresh browser context (own storage, own fake camera). */
-  static async open(browser: Browser, baseUrl: string, room: string, name: string): Promise<Participant> {
+  /** Opens the lobby in a fresh browser context (own storage, own fake camera), optionally with saved quality settings. */
+  static async open(browser: Browser, baseUrl: string, room: string, name: string, quality?: object): Promise<Participant> {
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.addInitScript(trafficProbe);
+    if (quality) await page.addInitScript((q) => localStorage.setItem('tutaj:quality', q), JSON.stringify(quality));
     await page.goto(`${baseUrl}/?room=${encodeURIComponent(room)}`);
     await page.fill('#name', name);
     // The lobby acquires camera + mic on load; wait until both are live.
@@ -109,8 +110,8 @@ export class Participant {
     return new Participant(context, page, name);
   }
 
-  static async join(browser: Browser, baseUrl: string, room: string, name: string, password?: string): Promise<Participant> {
-    const p = await Participant.open(browser, baseUrl, room, name);
+  static async join(browser: Browser, baseUrl: string, room: string, name: string, password?: string, quality?: object): Promise<Participant> {
+    const p = await Participant.open(browser, baseUrl, room, name, quality);
     await p.submitJoin(password);
     await expect(p.page.locator('#room-view')).toBeVisible();
     return p;

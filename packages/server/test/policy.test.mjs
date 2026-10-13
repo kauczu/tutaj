@@ -70,3 +70,10 @@ test('without SFU everything stays mesh; losing the SFU falls back', () => {
   q.setPref('sfu', 3);
   assert.deepEqual(q.disableSfu(3), { mode: 'mesh', reason: 'sfu-unavailable' });
 });
+
+test('high-quality media (gaming profile): 3 people switch to SFU right away, 2 stay on mesh', () => {
+  const p = new ModePolicy(true);
+  assert.equal(p.report('a', { ...ok, hq: true }, 2), null);
+  assert.equal(p.mode, 'mesh');
+  assert.deepEqual(p.report('a', { ...ok, hq: true }, 3), { mode: 'sfu', reason: 'quality' });
+});

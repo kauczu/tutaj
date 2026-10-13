@@ -5,6 +5,7 @@ import { LocalMedia, describeMediaError } from './media';
 import { Room } from './room';
 import { signalingUrl } from './signaling';
 import { $, fillDeviceSelect } from './ui/dom';
+import { renderQualityForm } from './ui/quality-form';
 import { setIcon } from './ui/icons';
 
 /** Exposed by the Electron preload when running as the desktop app. */
@@ -101,6 +102,7 @@ async function initLobby(): Promise<void> {
   serverInput.value = params.get('server') ?? store.get('server');
   ownerKeyInput.value = store.get('ownerKey');
   renderBranding();
+  renderQualityForm($('quality-lobby'), media, (msg) => showError(msg));
   if (params.get('room')) joinBtn.textContent = `Dołącz do „${params.get('room')}”`;
 
   $('random-room').addEventListener('click', () => (roomInput.value = randomRoom()));

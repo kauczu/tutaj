@@ -335,7 +335,14 @@ async function createWindow() {
     autoHideMenuBar: true,
     // The installed .exe carries its own icon; in development use the PNG.
     ...(app.isPackaged ? {} : { icon: join(here, 'build', 'icon.png') }),
-    webPreferences: { preload: join(here, 'preload.cjs'), sandbox: true, contextIsolation: true },
+    webPreferences: {
+      preload: join(here, 'preload.cjs'),
+      sandbox: true,
+      contextIsolation: true,
+      // During a game Tutaj is always in the background: keep timers (stats, speaking detection,
+      // bitrate control) running at full rate.
+      backgroundThrottling: false,
+    },
   });
 
   // Links (chat, invites, other sites) open in the system browser, never inside the app.
@@ -367,6 +374,11 @@ app.on('second-instance', () => {
     mainWindow.focus();
   }
 });
+
+// Chromium slows down hidden/occluded windows — exactly the state of a call window behind a game.
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 
 app.whenReady().then(async () => {
   if (settings.mode === 'lan') {

@@ -46,9 +46,10 @@
           </label>
 
           <details>
-            <summary>Urządzenia i ustawienia zaawansowane</summary>
+            <summary>Urządzenia, jakość i ustawienia zaawansowane</summary>
             <label>Mikrofon <select id="audio-input"></select></label>
             <label>Kamera <select id="video-input"></select></label>
+            <fieldset id="quality-lobby" class="quality"></fieldset>
             <label>Hasło pokoju (opcjonalnie)
               <input id="password" type="password" maxlength="128" autocomplete="off" placeholder="ustala je pierwsza osoba w pokoju" />
             </label>
@@ -124,6 +125,8 @@
             </select>
           </label>
           <p id="mode-info" class="muted small"></p>
+          <fieldset id="quality-room" class="quality"></fieldset>
+          <p id="send-stats" class="send-stats small" hidden></p>
           <div id="peer-stats" class="peer-stats"></div>
           <section id="about" class="about" aria-label="O aplikacji"></section>
           <button class="primary" value="close">Zamknij</button>

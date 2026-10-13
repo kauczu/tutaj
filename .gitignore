@@ -8,3 +8,4 @@ test-results/
 deploy/proxy/rendered-*
 *.tar.gz
 packages/desktop/release/
+.claude/

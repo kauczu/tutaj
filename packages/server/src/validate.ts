@@ -96,7 +96,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       const r = msg.report;
       if (!isObject(r)) return null;
       const kbps = typeof r.uplinkKbps === 'number' && Number.isFinite(r.uplinkKbps) && r.uplinkKbps >= 0 ? r.uplinkKbps : null;
-      return { type: 'quality', report: { bw: r.bw === true, cpu: r.cpu === true, relayed: r.relayed === true, uplinkKbps: kbps } };
+      return { type: 'quality', report: { bw: r.bw === true, cpu: r.cpu === true, relayed: r.relayed === true, uplinkKbps: kbps, hq: r.hq === true } };
     }
     case 'set-mode':
       return msg.pref === 'auto' || msg.pref === 'mesh' || msg.pref === 'sfu' ? { type: 'set-mode', pref: msg.pref } : null;

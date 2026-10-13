@@ -14,6 +14,7 @@ interface PeerHealth {
   strikes: number;
   cause: 'bandwidth' | 'cpu';
   relayed: boolean;
+  hq: boolean;
 }
 
 /**
@@ -21,7 +22,8 @@ interface PeerHealth {
  *
  * Mesh is the default and always wins for 2 people (one upstream either way). With 3–4 people
  * we move to the SFU once someone's uplink or CPU can't keep up with N−1 streams, or when
- * connections already go through TURN. Once on the SFU we stay there until the room shrinks
+ * connections already go through TURN, or as soon as someone sends high-quality media
+ * (gaming profile). Once on the SFU we stay there until the room shrinks
  * to 2, so the room does not flap between modes.
  */
 export class ModePolicy {
@@ -33,7 +35,7 @@ export class ModePolicy {
 
   /** Returns a decision only when the mode changes. */
   report(peerId: string, r: QualityReport, participants: number): Decision | null {
-    const h = this.health.get(peerId) ?? { strikes: 0, cause: 'bandwidth', relayed: false };
+    const h = this.health.get(peerId) ?? { strikes: 0, cause: 'bandwidth', relayed: false, hq: false };
     const uplinkShort = r.uplinkKbps !== null && participants > 1 && r.uplinkKbps < (participants - 1) * MIN_STREAM_KBPS;
     if (r.cpu) {
       h.strikes++;
@@ -45,6 +47,7 @@ export class ModePolicy {
       h.strikes = 0;
     }
     h.relayed = r.relayed;
+    h.hq = r.hq === true;
     this.health.set(peerId, h);
     return this.apply(participants);
   }
@@ -81,6 +84,8 @@ export class ModePolicy {
     if (this.mode === 'sfu') return { mode: 'sfu', reason: 'participants' };
     const all = [...this.health.values()];
     if (all.some((h) => h.relayed)) return { mode: 'sfu', reason: 'relay' };
+    // Studio audio / 1080p to N−1 peers would saturate an ordinary uplink — and hurt the game's ping.
+    if (all.some((h) => h.hq)) return { mode: 'sfu', reason: 'quality' };
     const struggling = all.find((h) => h.strikes >= STRIKES_TO_SWITCH);
     if (struggling) return { mode: 'sfu', reason: struggling.cause };
     return { mode: 'mesh', reason: 'participants' };

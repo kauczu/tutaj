@@ -2,6 +2,7 @@ import { Device, type types } from 'mediasoup-client';
 import type { IceServer, SfuMethod, SfuNotification, SfuProducerInfo } from '@tutaj/shared';
 import { Emitter } from './emitter';
 import type { LocalMedia } from './media';
+import { SCREEN_BITRATE, simulcastBitrates, videoBudget, videoCap } from './quality';
 
 type Request = <T>(method: SfuMethod, data?: Record<string, unknown>) => Promise<T>;
 
@@ -26,26 +27,13 @@ type SfuEvents = {
   failed: Error;
 };
 
-const SCREEN_ENCODINGS: RTCRtpEncodingParameters[] = [{ maxBitrate: 2_500_000 }];
-
 /**
  * Camera simulcast: the SFU forwards the layer each receiver can handle. Browsers drop the
  * top layers when the source is small (e.g. only 2 layers below 540p), so size the ladder
  * to the actual capture height to keep full resolution available.
  */
-function cameraEncodings(track: MediaStreamTrack): RTCRtpEncodingParameters[] {
-  const height = track.getSettings().height ?? 720;
-  if (height >= 540) {
-    return [
-      { scaleResolutionDownBy: 4, maxBitrate: 150_000 },
-      { scaleResolutionDownBy: 2, maxBitrate: 500_000 },
-      { scaleResolutionDownBy: 1, maxBitrate: 1_200_000 },
-    ];
-  }
-  return [
-    { scaleResolutionDownBy: 2, maxBitrate: 250_000 },
-    { scaleResolutionDownBy: 1, maxBitrate: 800_000 },
-  ];
+function cameraScales(track: MediaStreamTrack): number[] {
+  return (track.getSettings().height ?? 720) >= 540 ? [4, 2, 1] : [2, 1];
 }
 
 /**
@@ -67,6 +55,8 @@ export class SfuSession extends Emitter<SfuEvents> {
     private readonly request: Request,
     private readonly media: LocalMedia,
     private readonly iceServers: IceServer[],
+    /** Produce video as H.264 (hardware encoding) when the server supports it. */
+    private readonly h264 = false,
   ) {
     super();
   }
@@ -95,6 +85,11 @@ export class SfuSession extends Emitter<SfuEvents> {
     else if (n.method === 'producer-removed') {
       for (const [id, c] of this.consumers) if (c.consumer.producerId === n.data.producerId) this.closeConsumer(id);
     } else if (n.method === 'consumer-closed') this.closeConsumer(n.data.consumerId);
+  }
+
+  /** Stats of our upstream (what we send to the SFU). */
+  async sendStats(): Promise<RTCStatsReport | null> {
+    return this.sendTransport && !this.closed ? this.sendTransport.getStats() : null;
   }
 
   /** Remote peer's SFU stream, if any track of theirs is being received. */
@@ -138,20 +133,77 @@ export class SfuSession extends Emitter<SfuEvents> {
     if (this.closed || !this.sendTransport) return;
     for (const kind of ['audio', 'video'] as const) {
       const track = kind === 'audio' ? this.media.outgoingAudio : this.media.outgoingVideo;
-      const producer = this.producers[kind];
+      let producer = this.producers[kind];
+      // Layer count is fixed per producer: camera ⇄ screen or a big resolution change needs a new one.
+      if (producer && track && kind === 'video' && producer.rtpParameters.encodings?.length !== this.scalesFor(track).length) {
+        await this.closeProducer(kind);
+        producer = undefined;
+      }
       if (producer) {
         if (producer.track !== track) await producer.replaceTrack({ track });
       } else if (track) {
-        this.producers[kind] = await this.sendTransport.produce({
+        producer = this.producers[kind] = await this.sendTransport.produce({
           track,
           stopTracks: false, // LocalMedia owns the tracks (also used by the preview and mesh)
           disableTrackOnPause: false,
           zeroRtpOnPause: true,
           ...(kind === 'audio'
-            ? { codecOptions: { opusDtx: true, opusFec: true } }
-            : { encodings: this.media.sharingScreen ? SCREEN_ENCODINGS : cameraEncodings(track) }),
+            ? {
+                codecOptions: { opusStereo: true, opusFec: true, opusDtx: false, opusMaxAverageBitrate: 510_000 },
+                encodings: [{ maxBitrate: this.media.audioBitrate }],
+              }
+            : { encodings: this.encodingsFor(track), codec: this.videoCodec() }),
         });
       }
+    }
+    await this.tuneBitrates();
+  }
+
+  private scalesFor(track: MediaStreamTrack): number[] {
+    return this.media.sharingScreen ? [1] : cameraScales(track);
+  }
+
+  private bitratesFor(track: MediaStreamTrack): number[] {
+    const budget = videoBudget(this.media.quality, this.media.audioBitrate);
+    const cap = this.media.sharingScreen ? SCREEN_BITRATE : videoCap(track.getSettings().height);
+    return simulcastBitrates(this.scalesFor(track).length, cap, budget);
+  }
+
+  private encodingsFor(track: MediaStreamTrack): RTCRtpEncodingParameters[] {
+    const bitrates = this.bitratesFor(track);
+    return this.scalesFor(track).map((scaleResolutionDownBy, i) => ({ scaleResolutionDownBy, maxBitrate: bitrates[i] }));
+  }
+
+  private videoCodec(): types.RtpCodecCapability | undefined {
+    if (!this.h264) return undefined;
+    return this.device?.rtpCapabilities.codecs?.find(
+      (c) => c.mimeType.toLowerCase() === 'video/h264' && c.parameters?.['packetization-mode'] === 1,
+    );
+  }
+
+  private async closeProducer(kind: 'audio' | 'video'): Promise<void> {
+    const producer = this.producers[kind];
+    if (!producer) return;
+    delete this.producers[kind];
+    producer.close();
+    await this.request('close-producer', { producerId: producer.id }).catch(() => {});
+  }
+
+  /** Applies the current quality settings (audio bitrate, upload limit) without re-producing. */
+  private async tuneBitrates(): Promise<void> {
+    const targets: [types.Producer | undefined, number[]][] = [[this.producers.audio, [this.media.audioBitrate]]];
+    const video = this.producers.video;
+    if (video?.track) targets.push([video, this.bitratesFor(video.track)]);
+    for (const [producer, bitrates] of targets) {
+      const sender = producer?.rtpSender;
+      if (!sender || producer.closed) continue;
+      const params = sender.getParameters();
+      if (!params.encodings?.length || params.encodings.every((e, i) => e.maxBitrate === (bitrates[i] ?? bitrates.at(-1)))) continue;
+      params.encodings.forEach((e, i) => (e.maxBitrate = bitrates[i] ?? bitrates.at(-1)));
+      if (producer.kind === 'video') {
+        (params as RTCRtpSendParameters).degradationPreference = this.media.sharingScreen ? 'maintain-resolution' : 'maintain-framerate';
+      }
+      await sender.setParameters(params).catch((err) => console.warn('SFU setParameters', err));
     }
   }
 

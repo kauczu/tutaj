@@ -29,7 +29,7 @@ export type SignalData = { description: SessionDescription } | { candidate: IceC
 export type MediaMode = 'mesh' | 'sfu';
 /** What the room asked for; `auto` lets the server decide from quality reports. */
 export type ModePreference = 'auto' | 'mesh' | 'sfu';
-export type ModeReason = 'participants' | 'bandwidth' | 'cpu' | 'relay' | 'manual' | 'sfu-unavailable';
+export type ModeReason = 'participants' | 'bandwidth' | 'cpu' | 'relay' | 'quality' | 'manual' | 'sfu-unavailable';
 
 /** Periodic uplink health summary a client sends while in mesh mode. */
 export interface QualityReport {
@@ -41,6 +41,8 @@ export interface QualityReport {
   relayed: boolean;
   /** Sum of estimated available upload over all connections, kb/s. */
   uplinkKbps: number | null;
+  /** Sending high-quality media (studio audio or 1080p): 3+ person rooms should use the SFU. */
+  hq?: boolean;
 }
 
 export type SfuMethod =
