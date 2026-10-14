@@ -4,6 +4,7 @@ import { Emitter } from './emitter';
 import type { E2ee } from './e2ee';
 import type { LocalMedia } from './media';
 import { SCREEN_BITRATE, simulcastBitrates, videoBudget, videoCap } from './quality';
+import { t } from './i18n';
 
 type Request = <T>(method: SfuMethod, data?: Record<string, unknown>) => Promise<T>;
 
@@ -83,7 +84,7 @@ function capturePeerConnection<T>(create: () => T): { result: T; pc: RTCPeerConn
   window.RTCPeerConnection = Capturing;
   try {
     const result = create();
-    if (!pc) throw new Error('Nie udało się przygotować szyfrowania (brak połączenia SFU)');
+    if (!pc) throw new Error(t('sfu.e2eeSetupFailed'));
     return { result, pc };
   } finally {
     window.RTCPeerConnection = Native;
@@ -195,7 +196,7 @@ export class SfuSession extends Emitter<SfuEvents> {
       });
     }
     transport.on('connectionstatechange', (state) => {
-      if (state === 'failed' && !this.closed) this.emit('failed', new Error('Połączenie z SFU nieudane'));
+      if (state === 'failed' && !this.closed) this.emit('failed', new Error(t('sfu.failed')));
     });
     return transport;
   }
@@ -254,7 +255,7 @@ export class SfuSession extends Emitter<SfuEvents> {
             : { encodings: this.encodingsFor(track), codec: this.videoCodec() }),
         });
         try {
-          if (!producer.rtpSender?.transform) throw new Error('Szyfrowanie end-to-end nie działa w tej przeglądarce');
+          if (!producer.rtpSender?.transform) throw new Error(t('sfu.e2eeFailed'));
           await this.e2ee.whenActive(this.lastSendTransform);
         } catch (err) {
           placeholder.stop();

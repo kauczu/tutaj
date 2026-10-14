@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('tutaj', {
   switchMode: (mode) => ipcRenderer.invoke('tutaj:switch-mode', mode),
   /** Switches to another Tutaj server (https://…); empty string = the build's default. Restarts the app. */
   setServer: (url) => ipcRenderer.invoke('tutaj:set-server', url),
+  /** The page's interface language ('pl' | 'en'): the app's menus and dialogs follow it. */
+  setLanguage: (lang) => ipcRenderer.invoke('tutaj:set-language', lang),
   /** Reloads the server page (offline screen). */
   retry: () => ipcRenderer.invoke('tutaj:retry'),
   /** Game overlay: settings { enabled, corner, size, opacity, display, displays } and the size of its content. */

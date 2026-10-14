@@ -1,6 +1,7 @@
 import type { IceServer, MediaMode, ModePreference, ModeReason, ModerationAction, QualityReport, RoomState, ServerMessage } from '@tutaj/shared';
 import { SpeakingDetector, playCue } from './audio';
 import { E2ee, safetyCode } from './e2ee';
+import { locale, serverError, t, type Key } from './i18n';
 import { FileReceiver, MAX_FILE_SIZE, formatBytes, sendFile } from './files';
 import { LocalMedia, describeMediaError } from './media';
 import { parseAppMessage, type AppMessage, type PeerState } from './messages';
@@ -40,17 +41,8 @@ const MAX_RECONNECTS = 10;
 const REPORT_INTERVAL_MS = 5_000;
 const REPORT_WARMUP_MS = 10_000;
 
-const MODE_LABEL: Record<ModePreference, string> = { auto: 'Automatyczny', mesh: 'P2P', sfu: 'SFU (przez serwer)' };
-const REASON_LABEL: Record<ModeReason, string> = {
-  participants: 'liczba uczestników',
-  bandwidth: 'za słabe łącze wysyłające u jednej z osób',
-  cpu: 'przeciążony procesor u jednej z osób',
-  relay: 'połączenia przez serwer TURN',
-  manual: 'wybór ręczny',
-  quality: 'wysoka jakość obrazu lub dźwięku',
-  e2ee: 'uczestnik bez obsługi szyfrowania end-to-end',
-  'sfu-unavailable': 'SFU niedostępne',
-};
+const modeLabel = (pref: ModePreference) => t(`mode.${pref}` as Key);
+const reasonLabel = (reason: ModeReason) => t(`mode.reason.${reason}` as Key);
 
 /** Test aid (E2E tests): drop the keys we receive — proves media can't be seen without them. */
 function ignoreKeysForTests(): boolean {
@@ -75,7 +67,7 @@ async function connectAndJoin(
   const signaling = new Signaling(opts.signalingUrl);
   await signaling.connect();
   const welcome = await new Promise<Welcome>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new JoinError('Serwer nie odpowiada', false)), 8000);
+    const timer = setTimeout(() => reject(new JoinError(t('error.noResponse'), false)), 8000);
     const off = signaling.on('message', (msg) => {
       if (msg.type === 'welcome') {
         clearTimeout(timer);
@@ -84,7 +76,7 @@ async function connectAndJoin(
       } else if (msg.type === 'error') {
         clearTimeout(timer);
         off();
-        reject(new JoinError(msg.message, ['bad-password', 'room-full', 'room-limit', 'room-locked', 'kicked'].includes(msg.code)));
+        reject(new JoinError(serverError(msg), ['bad-password', 'room-full', 'room-limit', 'room-locked', 'kicked'].includes(msg.code)));
       }
     });
     signaling.send({
@@ -233,9 +225,9 @@ export class Room {
     this.relayState();
     this.setRoomState(welcome.roomState, false);
     void this.applyMode(welcome.mode);
-    if (firstJoin && welcome.privileged) toast('Rozpoznano klucz właściciela — limity serwera Cię nie dotyczą.');
+    if (firstJoin && welcome.privileged) toast(t('room.ownerKey'));
     if (welcome.peers.length === 0 && firstJoin) {
-      this.chat.addSystem('Jesteś pierwszy w pokoju — skopiuj zaproszenie i wyślij je innym.');
+      this.chat.addSystem(t('room.firstHere'));
     }
   }
 
@@ -248,8 +240,8 @@ export class Room {
         this.addPeer(msg.peer.id, msg.peer.name, false);
         this.relayState(msg.peer.id);
         if (!existing) {
-          this.chat.addSystem(`${msg.peer.name} dołącza`);
-          toast(`${msg.peer.name} dołącza do rozmowy`);
+          this.chat.addSystem(t('room.joins', { name: msg.peer.name }));
+          toast(t('room.joinsCall', { name: msg.peer.name }));
         }
         break;
       }
@@ -260,7 +252,7 @@ export class Room {
         if (!peer || (msg.reason === 'disconnect' && peer.healthy)) break;
         // Kicked: drop the P2P link too (they could otherwise keep it up), with a new key for the rest.
         this.peerGone(msg.id);
-        this.chat.addSystem(msg.reason === 'kicked' ? `${peer.state.name} — usunięto z pokoju` : `${peer.state.name} opuszcza pokój`);
+        this.chat.addSystem(t(msg.reason === 'kicked' ? 'room.removed' : 'room.leaves', { name: peer.state.name }));
         break;
       }
       case 'room-state':
@@ -284,13 +276,9 @@ export class Room {
         break;
       case 'mode': {
         this.pref = msg.pref;
-        if (msg.by) this.chat.addSystem(`${msg.by} ustawia tryb mediów: ${MODE_LABEL[msg.pref]}`);
+        if (msg.by) this.chat.addSystem(t('mode.setBy', { name: msg.by, mode: modeLabel(msg.pref) }));
         if (msg.mode !== this.mode) {
-          this.chat.addSystem(
-            msg.mode === 'sfu'
-              ? `Przełączam media na serwer SFU (${REASON_LABEL[msg.reason]})`
-              : `Przełączam media na połączenia bezpośrednie P2P (${REASON_LABEL[msg.reason]})`,
-          );
+          this.chat.addSystem(t(msg.mode === 'sfu' ? 'mode.toSfu' : 'mode.toMesh', { reason: reasonLabel(msg.reason) }));
         }
         void this.applyMode(msg.mode);
         break;
@@ -299,7 +287,7 @@ export class Room {
         this.sfu?.onNotify(msg);
         break;
       case 'error':
-        if (msg.code !== 'unknown-peer') toast(msg.message, 'error');
+        if (msg.code !== 'unknown-peer') toast(serverError(msg), 'error');
         break;
     }
   }
@@ -316,11 +304,11 @@ export class Room {
     this.hostId = state.host;
     this.locked = state.locked;
     if (announce && hostChanged) {
-      const name = this.isHost ? 'Ty' : this.peers.get(state.host ?? '')?.state.name;
-      if (name) this.chat.addSystem(this.isHost ? 'Jesteś teraz gospodarzem pokoju' : `${name} jest teraz gospodarzem pokoju`);
-      if (this.isHost) toast('Jesteś teraz gospodarzem pokoju — możesz wyciszać, usuwać i zablokować pokój');
+      const name = this.isHost ? t('room.you') : this.peers.get(state.host ?? '')?.state.name;
+      if (name) this.chat.addSystem(this.isHost ? t('mod.youHostNow') : t('mod.hostNow', { name }));
+      if (this.isHost) toast(t('mod.youHostNowToast'));
     }
-    if (announce && lockChanged) this.chat.addSystem(state.locked ? 'Pokój zablokowany — nowe osoby nie dołączą' : 'Pokój odblokowany');
+    if (announce && lockChanged) this.chat.addSystem(t(state.locked ? 'mod.locked' : 'mod.unlocked'));
     for (const tile of this.grid.all()) tile.setHost(tile.local ? this.isHost : tile.id === this.hostId);
     $('locked-badge').hidden = !state.locked;
     this.updateTileMenus();
@@ -334,11 +322,11 @@ export class Room {
         this.media.setAudioEnabled(false);
         this.broadcastState();
       }
-      toast(`${by} (gospodarz) wyciszył(a) Twój mikrofon — możesz go włączyć ponownie`);
+      toast(t('mod.mutedYou', { name: by }));
       return;
     }
     try {
-      sessionStorage.setItem('tutaj:notice', `${by} (gospodarz) usunął(-ęła) Cię z pokoju „${this.opts.roomId}”.`);
+      sessionStorage.setItem('tutaj:notice', t('mod.kickedYou', { name: by, room: this.opts.roomId }));
     } catch {
       /* no storage */
     }
@@ -359,7 +347,7 @@ export class Room {
         continue;
       }
       if (btn) continue;
-      btn = h('button', { class: 'tile-menu-btn', title: 'Moderacja', text: '⋮' });
+      btn = h('button', { class: 'tile-menu-btn', title: t('mod.menu'), text: '⋮' });
       btn.type = 'button';
       btn.onclick = (e) => {
         e.stopPropagation(); // not the tile's click (pin)
@@ -384,12 +372,12 @@ export class Room {
     };
     menu.replaceChildren(
       h('div', { class: 'tile-menu-title', text: name }),
-      item('Wycisz mikrofon', () => this.moderate('mute', peerId)),
-      item('Przekaż rolę gospodarza', () => this.moderate('make-host', peerId)),
+      item(t('mod.mute'), () => this.moderate('mute', peerId)),
+      item(t('mod.makeHost'), () => this.moderate('make-host', peerId)),
       item(
-        'Usuń z pokoju…',
+        t('mod.kick'),
         () => {
-          if (confirm(`Usunąć ${name} z pokoju? Nie będzie mógł (mogła) wrócić przez 10 minut.`)) this.moderate('kick', peerId);
+          if (confirm(t('mod.kickConfirm', { name }))) this.moderate('kick', peerId);
         },
         true,
       ),
@@ -403,9 +391,9 @@ export class Room {
   /** Settings dialog: lock / mute all for the host, who hosts for everyone else. */
   private renderHostSettings(): void {
     const box = $('host-settings');
-    const hostName = this.isHost ? 'Ty' : this.peers.get(this.hostId ?? '')?.state.name ?? '–';
+    const hostName = this.isHost ? t('room.you') : this.peers.get(this.hostId ?? '')?.state.name ?? '–';
     if (!this.isHost) {
-      box.replaceChildren(h('p', { class: 'muted small', text: `Gospodarz pokoju: ${hostName}${this.locked ? ' · pokój zablokowany' : ''}` }));
+      box.replaceChildren(h('p', { class: 'muted small', text: t('mod.hostIs', { name: hostName }) + (this.locked ? t('mod.lockedSuffix') : '') }));
       return;
     }
     const lock = h('input');
@@ -413,18 +401,18 @@ export class Room {
     lock.id = 'host-lock';
     lock.checked = this.locked;
     lock.onchange = () => this.moderate(lock.checked ? 'lock' : 'unlock');
-    const muteAll = h('button', { class: 'ghost', text: 'Wycisz wszystkich' });
+    const muteAll = h('button', { class: 'ghost', text: t('mod.muteAll') });
     muteAll.type = 'button';
     muteAll.id = 'host-mute-all';
     muteAll.onclick = () => {
       this.moderate('mute-all');
-      toast('Wyciszono wszystkich uczestników');
+      toast(t('mod.mutedAll'));
     };
     box.replaceChildren(
-      h('legend', { text: 'Gospodarz pokoju (Ty)' }),
-      h('label', { class: 'check' }, lock, 'Zablokuj pokój — nikt nowy nie dołączy'),
+      h('legend', { text: t('mod.youAreHost') }),
+      h('label', { class: 'check' }, lock, t('mod.lock')),
       muteAll,
-      h('p', { class: 'muted small', text: 'Na kafelku uczestnika (⋮): wycisz, przekaż rolę gospodarza, usuń z pokoju.' }),
+      h('p', { class: 'muted small', text: t('mod.tileHint') }),
     );
   }
 
@@ -438,7 +426,7 @@ export class Room {
       banner.textContent = text;
       banner.hidden = false;
     };
-    setBanner('Brak połączenia z serwerem — rozmowa trwa P2P, ponowne łączenie…');
+    setBanner(t('room.reconnecting'));
 
     for (let attempt = 0; attempt < MAX_RECONNECTS && !this.leaving; attempt++) {
       await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** attempt, 10_000)));
@@ -448,13 +436,13 @@ export class Room {
         if (this.leaving) return signaling.close();
         banner.hidden = true;
         this.attach(signaling, welcome);
-        toast('Połączono ponownie z serwerem');
+        toast(t('room.reconnected'));
         return;
       } catch (err) {
         if (err instanceof JoinError && err.fatal) return setBanner(err.message);
       }
     }
-    setBanner('Nie udało się połączyć z serwerem. Trwające połączenia P2P działają, ale nowe osoby nie dołączą.');
+    setBanner(t('room.reconnectFailed'));
   }
 
   // --- Peers ---------------------------------------------------------------
@@ -470,7 +458,7 @@ export class Room {
       done: (f, blob) => {
         handles.get(f.id)?.complete(blob);
         handles.delete(f.id);
-        if (!this.chat.open) toast(`${peer.state.name} wysyła plik: ${f.name}`);
+        if (!this.chat.open) toast(t('room.sendsFile', { name: peer.state.name, file: f.name }));
       },
       failed: (f, reason) => {
         handles.get(f.id)?.fail(reason);
@@ -498,27 +486,27 @@ export class Room {
           this.connectedAt.set(id, Date.now());
           tile.setStatus(null);
         } else if (s === 'disconnected') {
-          tile.setStatus('Problem z połączeniem…');
+          tile.setStatus(t('room.connProblem'));
         } else if (s === 'failed') {
           this.connectedAt.delete(id);
-          tile.setStatus('Połączenie przerwane — ponawianie…');
+          tile.setStatus(t('room.connRetry'));
           receiver.abort();
           watchdog(PEER_GONE_MS, () => {
             if (this.peers.get(id) !== peer || peer.healthy) return;
             if (this.online && this.present.has(id)) {
-              tile.setStatus('Nie można nawiązać połączenia P2P (sieć może wymagać serwera TURN)');
+              tile.setStatus(t('room.p2pFailed'));
             } else {
               this.peerGone(id);
-              this.chat.addSystem(`Utracono połączenie z: ${peer.state.name}`);
+              this.chat.addSystem(t('room.lostConnection', { name: peer.state.name }));
             }
           });
         }
       },
     }, this.meshMedia, this.h264);
 
-    tile.setStatus('Łączenie…');
+    tile.setStatus(t('room.connecting'));
     watchdog(CONNECT_TIMEOUT_MS, () => {
-      if (!peer.healthy) tile.setStatus('Nie można nawiązać połączenia P2P (sieć może wymagać serwera TURN)');
+      if (!peer.healthy) tile.setStatus(t('room.p2pFailed'));
     });
 
     this.peers.set(id, peer);
@@ -571,9 +559,9 @@ export class Room {
     }
     if (msg.t === 'bye') {
       this.peerGone(from);
-      this.chat.addSystem(`${peer.state.name} opuszcza pokój`);
+      this.chat.addSystem(t('room.leaves', { name: peer.state.name }));
     } else if (msg.t === 'state') {
-      if (msg.state.hand && !peer.state.hand) toast(`✋ ${msg.state.name} podnosi rękę`);
+      if (msg.state.hand && !peer.state.hand) toast(t('room.handUp', { name: msg.state.name }));
       peer.state = msg.state;
       this.grid.get(from)?.setState(msg.state);
     } else if (msg.t === 'chat') {
@@ -607,7 +595,7 @@ export class Room {
   private onE2eeProblem(peerId: string, problem: 'missing-key' | 'decrypt-failed'): void {
     const peer = this.peers.get(peerId);
     if (!peer || this.mode !== 'sfu') return;
-    if (problem === 'missing-key' && !this.e2ee?.hasKey(peerId)) this.grid.get(peerId)?.setStatus('Czekam na klucz szyfrowania…');
+    if (problem === 'missing-key' && !this.e2ee?.hasKey(peerId)) this.grid.get(peerId)?.setStatus(t('room.waitingKey'));
     // Lost a key (e.g. sent while our channel was reconnecting): ask for the current one.
     peer.sendApp({ t: 'e2ee-key-request' } satisfies AppMessage);
   }
@@ -654,7 +642,7 @@ export class Room {
       try {
         ({ SfuSession } = await import('./sfu'));
       } catch {
-        toast('Nie udało się wczytać modułu SFU — zostaję przy P2P', 'error');
+        toast(t('mode.sfuLoadFailed'), 'error');
         return;
       }
       if (this.mode !== 'sfu' || this.sfu || this.leaving) return; // superseded while loading
@@ -689,7 +677,7 @@ export class Room {
   private onSfuFailure(session: SfuSession, err: Error): void {
     if (this.sfu !== session) return;
     console.error(err);
-    toast(`${err.message} — wracam do P2P`, 'error');
+    toast(t('mode.backToP2p', { error: err.message }), 'error');
     this.sfu = null;
     session.close();
     this.setMeshMedia(true);
@@ -711,8 +699,8 @@ export class Room {
     badge.className = `mode-badge ${this.mode}`;
     badge.title =
       this.mode === 'sfu'
-        ? 'Media przez serwer SFU — szyfrowane end-to-end, serwer nie widzi obrazu ani nie słyszy dźwięku'
-        : 'Media bezpośrednio między uczestnikami — szyfrowane end-to-end przez WebRTC';
+        ? t('mode.sfuTitle')
+        : t('mode.meshTitle');
     // In P2P WebRTC encrypts end to end by itself; in SFU mode our frame encryption does.
     const lock = $('e2ee-badge');
     lock.hidden = false;
@@ -785,14 +773,14 @@ export class Room {
   }
 
   private sendFiles(files: File[]): void {
-    if (this.peers.size === 0) return toast('Nikogo nie ma w pokoju', 'error');
+    if (this.peers.size === 0) return toast(t('room.nobody'), 'error');
     for (const file of files) {
       if (file.size > MAX_FILE_SIZE) {
-        toast(`${file.name}: plik większy niż ${formatBytes(MAX_FILE_SIZE)}`, 'error');
+        toast(t('room.fileTooBig', { file: file.name, max: formatBytes(MAX_FILE_SIZE) }), 'error');
         continue;
       }
       for (const peer of this.peers.values()) {
-        const handle = this.chat.addTransfer(`Ty → ${peer.state.name}`, file.name, file.size, true);
+        const handle = this.chat.addTransfer(t('room.youTo', { name: peer.state.name }), file.name, file.size, true);
         const prev = this.fileQueues.get(peer.id) ?? Promise.resolve();
         const next = prev.then(() =>
           sendFile(peer.fileChannel, file, crypto.randomUUID(), (n) => handle.progress(n)).then(
@@ -914,7 +902,7 @@ export class Room {
   private setOverlayButton(hotkeys?: Record<string, string>): void {
     const btn = $('btn-overlay');
     btn.hidden = !this.overlay;
-    btn.title = `Nakładka na grę${hotkeys?.overlay ? ` (${formatAccelerator(hotkeys.overlay)})` : ''}`;
+    btn.title = t('ctl.overlay') + (hotkeys?.overlay ? ` (${formatAccelerator(hotkeys.overlay)})` : '');
   }
 
   private async setOverlay(on: boolean): Promise<void> {
@@ -961,34 +949,34 @@ export class Room {
     minimize.onchange = () => void apply({ minimizeCall: minimize.checked });
     const displays = current.displays.map((d, i): [string, string] => [
       String(d.id),
-      `Ekran ${i + 1}: ${d.label || 'monitor'} — ${d.width}×${d.height}${d.primary ? ' (główny)' : ''}`,
+      t('ov.screen', { n: i + 1, label: d.label || 'monitor', size: `${d.width}×${d.height}` }) + (d.primary ? t('ov.screenPrimary') : ''),
     ]);
     const label = (text: string, control: HTMLElement) => h('label', {}, text, control);
     box.replaceChildren(
-      h('legend', { text: 'Nakładka na grę' }),
-      h('label', { class: 'check' }, show, 'Pokaż nakładkę z kamerami nad grą'),
-      h('label', { class: 'check' }, minimize, 'Pokazanie nakładki minimalizuje okno rozmowy, ukrycie je przywraca'),
+      h('legend', { text: t('ov.title') }),
+      h('label', { class: 'check' }, show, t('ov.show')),
+      h('label', { class: 'check' }, minimize, t('ov.minimize')),
       ...(displays.length > 1
-        ? [label('Monitor', select('overlay-display', String(current.display ?? ''), [['', 'Główny'], ...displays], (v) => void apply({ display: v ? Number(v) : null })))]
+        ? [label(t('ov.monitor'), select('overlay-display', String(current.display ?? ''), [['', t('ov.primary')], ...displays], (v) => void apply({ display: v ? Number(v) : null })))]
         : []),
       label(
-        'Położenie',
+        t('ov.position'),
         select('overlay-corner', current.corner, [
-          ['top-left', 'Lewy górny róg'],
-          ['top-right', 'Prawy górny róg'],
-          ['bottom-left', 'Lewy dolny róg'],
-          ['bottom-right', 'Prawy dolny róg'],
+          ['top-left', t('ov.topLeft')],
+          ['top-right', t('ov.topRight')],
+          ['bottom-left', t('ov.bottomLeft')],
+          ['bottom-right', t('ov.bottomRight')],
         ], (v) => void apply({ corner: v as OverlaySettings['corner'] })),
       ),
-      label('Rozmiar', select('overlay-size', current.size, [['s', 'Mały'], ['m', 'Średni'], ['l', 'Duży']], (v) => void apply({ size: v as OverlaySettings['size'] }))),
+      label(t('ov.size'), select('overlay-size', current.size, [['s', t('ov.small')], ['m', t('ov.medium')], ['l', t('ov.large')]], (v) => void apply({ size: v as OverlaySettings['size'] }))),
       label(
-        'Krycie',
+        t('ov.opacity'),
         select('overlay-opacity', String(current.opacity), [['1', '100%'], ['0.85', '85%'], ['0.7', '70%'], ['0.5', '50%']], (v) => void apply({ opacity: Number(v) })),
       ),
       ...(bridge.setHotkey ? [this.hotkeyEditor(current.hotkeys)] : []),
       h('p', {
         class: 'muted small',
-        text: 'Skróty działają także wtedy, gdy aktywna jest gra (tylko w trakcie rozmowy). Nakładka jest widoczna nad grami w trybie „pełny ekran w oknie” (bez ramek), nie w wyłącznym pełnym ekranie. Nie przechwytuje myszy ani klawiatury.',
+        text: t('ov.hint'),
       }),
     );
   }
@@ -1000,9 +988,9 @@ export class Room {
     const error = h('p', { class: 'error small' });
     error.hidden = true;
     const labels: [HotkeyName, string][] = [
-      ['overlay', 'Pokaż/ukryj nakładkę'],
-      ['mute', 'Wycisz/włącz mikrofon'],
-      ['window', 'Zminimalizuj/przywróć okno rozmowy'],
+      ['overlay', t('hk.overlay')],
+      ['mute', t('hk.mute')],
+      ['window', t('hk.window')],
     ];
     const buttons = new Map<HotkeyName, HTMLButtonElement>();
     let stopRecording: (() => void) | null = null;
@@ -1015,14 +1003,14 @@ export class Room {
         hotkeys = res.hotkeys;
         this.setOverlayButton(hotkeys);
       }
-      error.textContent = res.ok ? '' : `${accelerator ? formatAccelerator(accelerator) : ''}: ${res.error ?? 'nie udało się zapisać'}`;
+      error.textContent = res.ok ? '' : `${accelerator ? formatAccelerator(accelerator) : ''}: ${res.error ?? t('hk.saveFailed')}`;
       error.hidden = res.ok;
       showAll();
     };
     const record = (name: HotkeyName, button: HTMLButtonElement) => {
       stopRecording?.();
       error.hidden = true;
-      button.textContent = 'Naciśnij skrót… (Esc — anuluj)';
+      button.textContent = t('hk.press');
       button.classList.add('recording');
       void bridge.pauseHotkeys?.(true);
       const onKey = (e: KeyboardEvent) => {
@@ -1055,19 +1043,19 @@ export class Room {
       const b = h('button', { class: 'ghost hotkey' });
       b.type = 'button';
       b.id = `hotkey-${name}`;
-      b.title = 'Kliknij i naciśnij nową kombinację klawiszy';
+      b.title = t('hk.clickToChange');
       b.onclick = () => record(name, b);
       buttons.set(name, b);
       return h('div', { class: 'hotkey-row' }, h('span', { text }), b);
     });
-    const reset = h('button', { class: 'ghost small', text: 'Przywróć domyślne skróty' });
+    const reset = h('button', { class: 'ghost small', text: t('hk.reset') });
     reset.type = 'button';
     reset.onclick = async () => {
       stopRecording?.();
       for (const [name] of labels) await save(name, null);
     };
     showAll();
-    return h('div', { class: 'hotkeys' }, h('span', { class: 'hotkeys-title', text: 'Skróty klawiszowe' }), ...rows, error, reset);
+    return h('div', { class: 'hotkeys' }, h('span', { class: 'hotkeys-title', text: t('hk.title') }), ...rows, error, reset);
   }
 
   private async toggleMic(): Promise<void> {
@@ -1076,7 +1064,7 @@ export class Room {
         await this.media.setMicrophone(this.media.audioDeviceId);
         this.media.setAudioEnabled(true);
       } catch (e) {
-        toast(`Mikrofon: ${describeMediaError(e)}`, 'error');
+        toast(t('media.micProblem', { error: describeMediaError(e) }), 'error');
       }
     } else {
       this.media.setAudioEnabled(!this.media.audioEnabled);
@@ -1088,7 +1076,7 @@ export class Room {
     try {
       await this.media.setCamera(!this.media.cameraOn);
     } catch (e) {
-      toast(`Kamera: ${describeMediaError(e)}`, 'error');
+      toast(t('media.cameraProblem', { error: describeMediaError(e) }), 'error');
     }
   }
 
@@ -1097,7 +1085,7 @@ export class Room {
     try {
       await this.media.startScreen();
     } catch (e) {
-      if (!(e instanceof DOMException && e.name === 'NotAllowedError')) toast(`Ekran: ${describeMediaError(e)}`, 'error');
+      if (!(e instanceof DOMException && e.name === 'NotAllowedError')) toast(t('media.screenProblem', { error: describeMediaError(e) }), 'error');
     }
   }
 
@@ -1107,7 +1095,7 @@ export class Room {
     const picker = $('reaction-picker');
     picker.replaceChildren(
       ...REACTIONS.map((emoji, i) => {
-        const b = h('button', { title: `Reakcja ${emoji} (${i + 1})` }, emoji, h('kbd', { text: String(i + 1) }));
+        const b = h('button', { title: t('ctl.reaction', { emoji, n: i + 1 }) }, emoji, h('kbd', { text: String(i + 1) }));
         b.type = 'button';
         b.setAttribute('role', 'menuitem');
         b.onclick = () => {
@@ -1159,10 +1147,10 @@ export class Room {
     if (!this.recorder.active) {
       try {
         this.recorder.start();
-        toast('Nagrywanie rozpoczęte (zapisywane tylko lokalnie)');
-        this.sendApp({ t: 'chat', id: crypto.randomUUID(), text: '🔴 rozpoczyna nagrywanie rozmowy', ts: Date.now() });
+        toast(t('room.recording'));
+        this.sendApp({ t: 'chat', id: crypto.randomUUID(), text: t('room.recordingChat'), ts: Date.now() });
       } catch (e) {
-        toast(`Nagrywanie: ${describeMediaError(e)}`, 'error');
+        toast(t('media.recordProblem', { error: describeMediaError(e) }), 'error');
       }
     } else {
       await this.saveRecording();
@@ -1187,9 +1175,9 @@ export class Room {
     const link = this.inviteLink();
     try {
       await navigator.clipboard.writeText(link);
-      toast('Link skopiowany do schowka');
+      toast(t('room.linkCopied'));
     } catch {
-      window.prompt('Skopiuj link zaproszenia:', link);
+      window.prompt(t('room.copyLink'), link);
     }
   }
 
@@ -1198,11 +1186,11 @@ export class Room {
     const audioIn = $<HTMLSelectElement>('set-audio-input');
     const videoIn = $<HTMLSelectElement>('set-video-input');
     const audioOut = $<HTMLSelectElement>('set-audio-output');
-    fillDeviceSelect(audioIn, await LocalMedia.devices('audioinput'), this.media.audioDeviceId, 'Mikrofon');
-    fillDeviceSelect(videoIn, await LocalMedia.devices('videoinput'), this.media.videoDeviceId, 'Kamera');
+    fillDeviceSelect(audioIn, await LocalMedia.devices('audioinput'), this.media.audioDeviceId, t('set.mic'));
+    fillDeviceSelect(videoIn, await LocalMedia.devices('videoinput'), this.media.videoDeviceId, t('set.camera'));
     const sinkSupported = 'setSinkId' in HTMLMediaElement.prototype;
     $('set-audio-output-wrap').hidden = !sinkSupported;
-    if (sinkSupported) fillDeviceSelect(audioOut, await LocalMedia.devices('audiooutput'), undefined, 'Głośnik');
+    if (sinkSupported) fillDeviceSelect(audioOut, await LocalMedia.devices('audiooutput'), undefined, t('set.speaker'));
 
     audioIn.onchange = () => this.media.setMicrophone(audioIn.value).catch((e) => toast(describeMediaError(e), 'error'));
     videoIn.onchange = () => this.media.setCamera(true, videoIn.value).catch((e) => toast(describeMediaError(e), 'error'));
@@ -1215,8 +1203,8 @@ export class Room {
     modeSelect.value = this.pref;
     modeSelect.disabled = !this.sfuAvailable;
     $('mode-info').textContent = this.sfuAvailable
-      ? `Teraz: ${this.mode === 'sfu' ? 'SFU' : 'P2P'}. Tryb automatyczny przełącza na SFU przy 3+ osobach, gdy łącze lub procesor nie nadąża.`
-      : 'Serwer nie ma włączonego SFU — media zawsze płyną P2P.';
+      ? t('mode.info', { mode: this.mode === 'sfu' ? 'SFU' : 'P2P' })
+      : t('mode.noSfu');
     modeSelect.onchange = () => this.signaling.send({ type: 'set-mode', pref: modeSelect.value as ModePreference });
     this.renderHostSettings();
     renderQualityForm($('quality-room'), this.media, (msg) => toast(msg, 'error'));
@@ -1255,8 +1243,8 @@ export class Room {
     badge.textContent = send!.hardware ? 'GPU' : 'CPU';
     badge.className = `mode-badge ${send!.hardware ? 'gpu' : 'cpu'}`;
     badge.title = send!.hardware
-      ? `Obraz kodowany sprzętowo — karta graficzna (${send!.codec ?? 'wideo'})`
-      : `Obraz kodowany programowo — procesor (${send!.codec ?? 'wideo'})`;
+      ? t('enc.gpu', { codec: send!.codec ?? t('enc.video') })
+      : t('enc.cpu', { codec: send!.codec ?? t('enc.video') });
   }
 
   /** "What am I sending": resolution, codec/encoder and bitrates, for checking quality during a game. */
@@ -1270,20 +1258,20 @@ export class Room {
     const s = list[0];
     const video = list.reduce((sum, x) => sum + x.videoKbps, 0);
     const audio = list.reduce((sum, x) => sum + x.audioKbps, 0);
-    const rate = (kbps: number) => (kbps >= 1000 ? `${(kbps / 1000).toLocaleString('pl-PL', { maximumFractionDigits: 1 })} Mb/s` : `${kbps} kb/s`);
+    const rate = (kbps: number) => (kbps >= 1000 ? `${(kbps / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} Mb/s` : `${kbps} kb/s`);
     const parts: string[] = [];
     if (s.resolution) parts.push(`${s.resolution}${s.fps ? ` @ ${s.fps} kl/s` : ''}`);
-    if (s.codec) parts.push(`${s.codec}${s.hardware === true ? ' (sprzętowo)' : s.hardware === false ? ' (programowo)' : ''}`);
-    if (s.resolution) parts.push(`obraz ${rate(video)}`);
-    if (s.audioChannels) parts.push(`dźwięk ${s.audioChannels === 2 ? 'stereo' : 'mono'} ${rate(audio)}`);
-    el.textContent = `Wysyłasz: ${parts.join(' · ')}`;
+    if (s.codec) parts.push(`${s.codec}${s.hardware === true ? t('set.hw') : s.hardware === false ? t('set.sw') : ''}`);
+    if (s.resolution) parts.push(t('set.video', { rate: rate(video) }));
+    if (s.audioChannels) parts.push(t('set.audio', { channels: s.audioChannels === 2 ? 'stereo' : 'mono', rate: rate(audio) }));
+    el.textContent = t('set.sending', { parts: parts.join(' · ') });
   }
 
   private renderStats(): void {
     this.renderSendSummary();
     const box = $('peer-stats');
     if (this.peers.size === 0) {
-      box.replaceChildren(h('p', { class: 'muted', text: 'Brak innych uczestników.' }));
+      box.replaceChildren(h('p', { class: 'muted', text: t('set.noOthers') }));
       return;
     }
     const rows = [...this.peers.values()].map((p) => {
@@ -1299,12 +1287,12 @@ export class Room {
         h('td', { class: 'code', text: this.codes.get(p.id) ?? '–' }),
       );
     });
-    const head = h('tr', {}, ...['Uczestnik', 'RTT', 'Straty', 'Odbiór', 'Trasa', 'Kod'].map((t) => h('th', { text: t })));
+    const head = h('tr', {}, ...[t('set.col.name'), 'RTT', t('set.col.loss'), t('set.col.in'), t('set.col.route'), t('set.col.code')].map((c) => h('th', { text: c })));
     box.replaceChildren(
       h('table', {}, h('thead', {}, head), h('tbody', {}, ...rows)),
       h('p', {
         class: 'muted small',
-        text: 'Kod bezpieczeństwa: porównajcie go głosem — jeśli u Ciebie i u rozmówcy jest taki sam, nikt (także serwer) nie podsłuchuje połączenia ani nie przechwycił kluczy szyfrowania.',
+        text: t('set.codeHint'),
       }),
     );
   }

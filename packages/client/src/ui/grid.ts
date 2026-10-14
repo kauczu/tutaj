@@ -3,8 +3,9 @@ import type { PeerStats } from '../peer';
 import { h } from './dom';
 import { icon } from './icons';
 import { floatReaction } from './reactions';
+import { t } from '../i18n';
 
-const QUALITY_LABEL = { good: 'Dobre połączenie', fair: 'Średnie połączenie', poor: 'Słabe połączenie', unknown: 'Łączenie…' };
+const qualityLabel = (q: 'good' | 'fair' | 'poor' | 'unknown') => t(`tile.quality.${q}`);
 
 export class Tile {
   readonly el: HTMLDivElement;
@@ -30,9 +31,9 @@ export class Tile {
     this.video.muted = local; // never play our own mic back
     this.avatar = h('div', { class: 'avatar' });
     this.nameEl = h('span', { class: 'name' });
-    this.micEl = h('span', { class: 'mic-off', title: 'Wyciszony' });
+    this.micEl = h('span', { class: 'mic-off', title: t('tile.muted') });
     this.micEl.innerHTML = icon('micOff');
-    this.handEl = h('span', { class: 'hand', text: '✋', title: 'Podniesiona ręka' });
+    this.handEl = h('span', { class: 'hand', text: '✋', title: t('tile.hand') });
     this.qualityEl = h('span', { class: 'quality unknown' });
     this.statusEl = h('div', { class: 'status' });
     this.el = h(
@@ -42,7 +43,7 @@ export class Tile {
       this.avatar,
       this.statusEl,
       this.handEl,
-      h('div', { class: 'label' }, this.qualityEl, this.micEl, this.nameEl, h('span', { class: 'crown', text: '👑', title: 'Gospodarz pokoju' })),
+      h('div', { class: 'label' }, this.qualityEl, this.micEl, this.nameEl, h('span', { class: 'crown', text: '👑', title: t('mod.crown') })),
     );
     this.setState(state);
   }
@@ -61,7 +62,7 @@ export class Tile {
 
   setState(state: PeerState): void {
     this.state = state;
-    const label = this.local ? `${state.name} (Ty)` : state.name;
+    const label = this.local ? t('tile.self', { name: state.name }) : state.name;
     this.nameEl.textContent = label;
     this.avatar.textContent = (state.name.trim()[0] ?? '?').toUpperCase();
     this.el.classList.toggle('no-video', !state.video);
@@ -77,8 +78,8 @@ export class Tile {
     const q = stats?.quality ?? 'unknown';
     this.qualityEl.className = `quality ${q}`;
     this.qualityEl.title = stats
-      ? `${QUALITY_LABEL[q]} · RTT ${stats.rttMs ?? '–'} ms · straty ${stats.lossPct.toFixed(1)}%${stats.relayed ? ' · przez TURN' : ''}`
-      : QUALITY_LABEL.unknown;
+      ? t('tile.stats', { quality: qualityLabel(q), rtt: stats.rttMs ?? '–', loss: stats.lossPct.toFixed(1) }) + (stats.relayed ? t('tile.viaTurn') : '')
+      : qualityLabel('unknown');
   }
 
   setStatus(text: string | null): void {

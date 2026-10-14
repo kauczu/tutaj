@@ -1,4 +1,5 @@
 import { parseFileControl, type FileControl } from './messages';
+import { t } from './i18n';
 
 const CHUNK = 16 * 1024;
 const SLAB = 1024 * 1024;
@@ -15,7 +16,7 @@ function waitForDrain(ch: RTCDataChannel): Promise<void> {
     };
     const fail = () => {
       ch.removeEventListener('bufferedamountlow', done);
-      reject(new Error('Kanał zamknięty'));
+      reject(new Error(t('file.channelClosed')));
     };
     ch.addEventListener('bufferedamountlow', done);
     ch.addEventListener('close', fail, { once: true });
@@ -26,7 +27,7 @@ const sendControl = (ch: RTCDataChannel, msg: FileControl) => ch.send(JSON.strin
 
 /** Streams one file over an ordered DataChannel with backpressure. */
 export async function sendFile(ch: RTCDataChannel, file: File, id: string, onProgress: (sent: number) => void): Promise<void> {
-  if (ch.readyState !== 'open') throw new Error('Brak połączenia P2P z uczestnikiem');
+  if (ch.readyState !== 'open') throw new Error(t('file.noP2p'));
   ch.bufferedAmountLowThreshold = LOW_WATER;
   sendControl(ch, { t: 'file-start', id, name: file.name, size: file.size, mime: file.type });
   let offset = 0;
@@ -34,7 +35,7 @@ export async function sendFile(ch: RTCDataChannel, file: File, id: string, onPro
     while (offset < file.size) {
       const slab = await file.slice(offset, offset + SLAB).arrayBuffer();
       for (let pos = 0; pos < slab.byteLength; pos += CHUNK) {
-        if (ch.readyState !== 'open') throw new Error('Połączenie przerwane');
+        if (ch.readyState !== 'open') throw new Error(t('file.interrupted'));
         if (ch.bufferedAmount > HIGH_WATER) await waitForDrain(ch);
         ch.send(slab.slice(pos, pos + CHUNK));
       }
@@ -78,14 +79,14 @@ export class FileReceiver {
       }
       if (!ctrl) return;
       if (ctrl.t === 'file-start') {
-        if (this.current) this.fail('przerwany przez nowy transfer');
+        if (this.current) this.fail(t('file.replaced'));
         if (ctrl.size > MAX_FILE_SIZE) return;
         const meta = { id: ctrl.id, name: ctrl.name, size: ctrl.size, mime: ctrl.mime };
         this.current = { meta, chunks: [], received: 0, lastReport: 0 };
         this.ev.start(meta);
       } else if (this.current?.meta.id === ctrl.id) {
         if (ctrl.t === 'file-cancel') this.fail('anulowano');
-        else if (this.current.received !== this.current.meta.size) this.fail('niekompletny plik');
+        else if (this.current.received !== this.current.meta.size) this.fail(t('file.incomplete'));
         else {
           const { meta, chunks } = this.current;
           this.current = null;
@@ -98,7 +99,7 @@ export class FileReceiver {
     if (!cur || !(e.data instanceof ArrayBuffer)) return;
     cur.chunks.push(e.data);
     cur.received += e.data.byteLength;
-    if (cur.received > cur.meta.size) return this.fail('plik większy niż zapowiedziano');
+    if (cur.received > cur.meta.size) return this.fail(t('file.tooLong'));
     if (cur.received - cur.lastReport > 256 * 1024 || cur.received === cur.meta.size) {
       cur.lastReport = cur.received;
       this.ev.progress(cur.meta, cur.received);
@@ -107,7 +108,7 @@ export class FileReceiver {
 
   /** Call when the connection drops mid-transfer. */
   abort(): void {
-    if (this.current) this.fail('połączenie przerwane');
+    if (this.current) this.fail(t('file.connLost'));
   }
 
   private fail(reason: string): void {

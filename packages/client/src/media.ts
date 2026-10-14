@@ -1,5 +1,6 @@
 import { Emitter } from './emitter';
 import { AUDIO_BITRATE, loadQuality, saveQuality, type QualitySettings } from './quality';
+import { t } from './i18n';
 
 type MediaEvents = {
   /** Outgoing audio or video track changed (device switch, camera toggle, screen share). */
@@ -26,13 +27,13 @@ export function describeMediaError(err: unknown): string {
   const name = err instanceof DOMException ? err.name : '';
   switch (name) {
     case 'NotAllowedError':
-      return 'Brak zgody na dostęp do kamery/mikrofonu';
+      return t('media.denied');
     case 'NotFoundError':
-      return 'Nie znaleziono urządzenia';
+      return t('media.notFound');
     case 'NotReadableError':
-      return 'Urządzenie jest zajęte przez inną aplikację';
+      return t('media.busy');
     case 'OverconstrainedError':
-      return 'Wybrane urządzenie jest niedostępne';
+      return t('media.unavailable');
     default:
       return err instanceof Error ? err.message : String(err);
   }
@@ -88,20 +89,20 @@ export class LocalMedia extends Emitter<MediaEvents> {
   async start(wantAudio = true, wantVideo = true): Promise<string[]> {
     const problems: string[] = [];
     if (!navigator.mediaDevices?.getUserMedia) {
-      return ['Przeglądarka nie udostępnia kamery/mikrofonu (wymagane HTTPS lub localhost)'];
+      return [t('media.noApi')];
     }
     if (wantAudio) {
       try {
         await this.setMicrophone(this.audioDeviceId);
       } catch (e) {
-        problems.push(`Mikrofon: ${describeMediaError(e)}`);
+        problems.push(t('media.micProblem', { error: describeMediaError(e) }));
       }
     }
     if (wantVideo) {
       try {
         await this.setCamera(true);
       } catch (e) {
-        problems.push(`Kamera: ${describeMediaError(e)}`);
+        problems.push(t('media.cameraProblem', { error: describeMediaError(e) }));
       }
     }
     return problems;

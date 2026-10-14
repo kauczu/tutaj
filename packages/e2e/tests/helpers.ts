@@ -98,7 +98,8 @@ export class Participant {
 
   /** Opens the lobby in a fresh browser context (own storage, own fake camera), optionally with saved quality settings. */
   static async open(browser: Browser, baseUrl: string, room: string, name: string, quality?: object): Promise<Participant> {
-    const context = await browser.newContext();
+    // Polish interface (it follows the browser language); English is covered by i18n.spec.
+    const context = await browser.newContext({ locale: 'pl-PL' });
     const page = await context.newPage();
     await page.addInitScript(trafficProbe);
     if (quality) await page.addInitScript((q) => localStorage.setItem('tutaj:quality', q), JSON.stringify(quality));

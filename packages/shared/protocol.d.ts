@@ -152,4 +152,5 @@ export type ServerMessage =
   | { type: 'moderated'; action: 'mute' | 'kick'; by: string }
   | { type: 'signal'; from: string; sid: string; data: SignalData }
   | { type: 'relay'; from: string; payload: unknown }
-  | { type: 'error'; code: ErrorCode; message: string };
+  /** `message` is Polish; clients translate by `code`. `minutes`: how long a kicked participant is kept out. */
+  | { type: 'error'; code: ErrorCode; message: string; minutes?: number };

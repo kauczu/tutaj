@@ -1,4 +1,5 @@
 import type { TransformOptions, WorkerIn, WorkerOut } from './worker';
+import { t } from '../i18n';
 
 /** A participant's frame key, as sent to the others over the P2P DataChannel (never via the server). */
 export interface KeyMessage {
@@ -110,7 +111,7 @@ export class E2ee {
     return new Promise((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.waiting.delete(id);
-        reject(new Error('Szyfrowanie end-to-end nie działa w tej przeglądarce'));
+        reject(new Error(t('sfu.e2eeFailed')));
       }, timeoutMs);
       this.waiting.set(id, () => {
         clearTimeout(timer);

@@ -36,42 +36,61 @@
       <button id="cancel" type="button">Anuluj</button>
     </div>
     <script>
+      const en = new URLSearchParams(location.search).get('lang') === 'en';
+      const T = en
+        ? {
+            title: 'Tutaj update', downloading: 'Downloading the Tutaj {v} update…', connecting: 'Connecting…', of: 'of',
+            installing: 'Installing Tutaj {v}…', restart: 'The app restarts in a moment.', downloaded: 'Tutaj {v} downloaded',
+            onQuit: 'It installs when the app closes.', failed: 'Could not download the update', error: 'Download error',
+            hide: 'Hide', hideTitle: 'The download goes on in the background (progress on the taskbar icon)', cancel: 'Cancel', close: 'Close',
+          }
+        : {
+            title: 'Aktualizacja Tutaj', downloading: 'Pobieranie aktualizacji Tutaj {v}…', connecting: 'Łączenie…', of: 'z',
+            installing: 'Instalowanie Tutaj {v}…', restart: 'Aplikacja za chwilę uruchomi się ponownie.', downloaded: 'Tutaj {v} pobrany',
+            onQuit: 'Zainstaluje się po zamknięciu aplikacji.', failed: 'Nie udało się pobrać aktualizacji', error: 'Błąd pobierania',
+            hide: 'Ukryj', hideTitle: 'Pobieranie trwa dalej w tle (postęp na ikonie na pasku zadań)', cancel: 'Anuluj', close: 'Zamknij',
+          };
+      document.documentElement.lang = en ? 'en' : 'pl';
+      document.title = T.title;
       const $ = (id) => document.getElementById(id);
-      const mb = (b) => (b / 1048576).toLocaleString('pl-PL', { maximumFractionDigits: 1 });
+      $('hide').textContent = T.hide;
+      $('hide').title = T.hideTitle;
+      $('cancel').textContent = T.cancel;
+      const mb = (b) => (b / 1048576).toLocaleString(en ? 'en-GB' : 'pl-PL', { maximumFractionDigits: 1 });
       $('hide').onclick = () => window.updater.hide();
       $('cancel').onclick = () => window.updater.cancel();
       /** State from the main process: downloading / installing / ready / error. */
       window.updater.onState((s) => {
         const bar = $('bar');
         if (s.state === 'downloading') {
-          $('title').textContent = `Pobieranie aktualizacji Tutaj ${s.version}…`;
+          $('title').textContent = T.downloading.replace('{v}', s.version);
           const known = s.total > 0;
           bar.classList.toggle('busy', !known);
           $('fill').style.width = `${Math.round(s.percent)}%`;
-          $('left').innerHTML = known ? `<strong>${Math.floor(s.percent)}%</strong> · ${mb(s.transferred)} z ${mb(s.total)} MB` : 'Łączenie…';
+          $('left').innerHTML = known ? `<strong>${Math.floor(s.percent)}%</strong> · ${mb(s.transferred)} ${T.of} ${mb(s.total)} MB` : T.connecting;
           $('right').textContent = s.bytesPerSecond ? `${mb(s.bytesPerSecond)} MB/s` : '';
         } else if (s.state === 'installing') {
-          $('title').textContent = `Instalowanie Tutaj ${s.version}…`;
+          $('title').textContent = T.installing.replace('{v}', s.version);
           bar.classList.add('busy');
-          $('left').textContent = 'Aplikacja za chwilę uruchomi się ponownie.';
+          $('left').textContent = T.restart;
           $('right').textContent = '';
           $('hide').hidden = $('cancel').hidden = true;
         } else if (s.state === 'ready') {
-          $('title').textContent = `Tutaj ${s.version} pobrany`;
+          $('title').textContent = T.downloaded.replace('{v}', s.version);
           bar.classList.remove('busy');
           $('fill').style.width = '100%';
-          $('left').textContent = 'Zainstaluje się po zamknięciu aplikacji.';
+          $('left').textContent = T.onQuit;
           $('right').textContent = '';
           $('cancel').hidden = true;
           $('hide').textContent = 'OK';
         } else if (s.state === 'error') {
-          $('title').textContent = 'Nie udało się pobrać aktualizacji';
+          $('title').textContent = T.failed;
           bar.classList.remove('busy');
           $('left').innerHTML = '';
-          $('left').append(Object.assign(document.createElement('span'), { className: 'error', textContent: s.message || 'Błąd pobierania' }));
+          $('left').append(Object.assign(document.createElement('span'), { className: 'error', textContent: s.message || T.error }));
           $('right').textContent = '';
           $('cancel').hidden = true;
-          $('hide').textContent = 'Zamknij';
+          $('hide').textContent = T.close;
         }
       });
     </script>

@@ -39,6 +39,8 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - **nakładka na grę** (aplikacja desktopowa) – małe kamery współgraczy nad grą, skróty działające w grze
 - **szyfrowanie end-to-end także przez SFU** – serwer przekazuje obraz i dźwięk, których nie może odczytać; kody bezpieczeństwa
 - **profil jakości „Gra”** – dźwięk studyjny, kamera 1080p, sprzętowe kodowanie i limit wysyłania (zob. niżej)
+- **interfejs po polsku i angielsku** – automatycznie według języka systemu/przeglądarki, zmiana w ustawieniach zaawansowanych lobby;
+  aplikacja desktopowa (menu, okna dialogowe, okienko aktualizacji) idzie za wyborem
 - **Pomoc** – skrócona instrukcja obsługi: Ustawienia → Pomoc, stopka lobby albo klawisz F1
 - PWA (instalowalna, działa offline jako „powłoka”), aplikacja desktopowa (Electron) z automatycznymi aktualizacjami
 

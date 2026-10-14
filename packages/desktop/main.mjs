@@ -2,6 +2,7 @@ import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, Menu, net
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setUiLang, t, uiLang } from './i18n.mjs';
 import { initUpdater } from './updater.mjs';
 
 /*
@@ -111,6 +112,8 @@ function loadSettings() {
     window: sanitizeWindow(saved.window),
     /** Version the user chose not to install ("Pomiń tę wersję"). */
     skipVersion: typeof saved.skipVersion === 'string' ? saved.skipVersion : null,
+    /** Interface language reported by the page ('pl' | 'en'); null = the system's. */
+    language: saved.language === 'pl' || saved.language === 'en' ? saved.language : null,
     hotkeys: sanitizeHotkeys(saved.hotkeys),
   };
 }
@@ -171,7 +174,7 @@ function pickSource(parent) {
       modal: true,
       width: 760,
       height: 520,
-      title: 'Wybierz ekran lub okno',
+      title: t('picker.title'),
       autoHideMenuBar: true,
       backgroundColor: '#02060c',
       webPreferences: { preload: join(here, 'picker-preload.cjs'), sandbox: true, contextIsolation: true },
@@ -190,7 +193,7 @@ function pickSource(parent) {
     );
     ipcMain.on('picker:choose', (_e, id) => finish(id));
     picker.on('closed', () => finish(null));
-    await picker.loadFile(join(here, 'picker.html'));
+    await picker.loadFile(join(here, 'picker.html'), { query: { lang: uiLang() } });
   });
 }
 
@@ -220,7 +223,7 @@ const hostOf = (url) => {
  */
 function showServerPage(kind, reason) {
   void mainWindow.loadFile(SERVER_PAGE, {
-    query: { kind, server: settings.serverUrl, default: DEFAULT_SERVER, mode: settings.mode, reason: reason ?? '' },
+    query: { kind, server: settings.serverUrl, default: DEFAULT_SERVER, mode: settings.mode, reason: reason ?? '', lang: uiLang() },
   });
 }
 
@@ -255,17 +258,17 @@ function switchMode(mode) {
  */
 async function setServer(input) {
   const url = normalizeServer(input);
-  if (url === null) return { ok: false, error: 'To nie jest prawidłowy adres.' };
+  if (url === null) return { ok: false, error: t('server.badAddress') };
   const isDefault = !url || url === originOf(DEFAULT_SERVER);
   if (!isDefault) {
-    if (!isAllowedServer(url)) return { ok: false, error: 'Adres musi zaczynać się od https://' };
+    if (!isAllowedServer(url)) return { ok: false, error: t('server.needHttps') };
     const check = await verifyServer(url);
     if (!check.ok) {
       return {
         ok: false,
         error: check.unreachable
-          ? `Nie udało się połączyć z ${hostOf(url)}. Sprawdź adres i połączenie z internetem.`
-          : `Pod adresem ${hostOf(url)} nie działa serwer Tutaj — nic nie zmieniono.`,
+          ? t('server.unreachable', { host: hostOf(url) })
+          : t('server.foreign', { host: hostOf(url) }),
       };
     }
   }
@@ -283,27 +286,27 @@ function buildMenu() {
       {
         label: 'Tutaj',
         submenu: [
-          { label: 'Wybierz serwer…', click: () => showServerPage('choose') },
-          { label: `Przywróć serwer domyślny (${hostOf(DEFAULT_SERVER)})`, enabled: !onDefault, click: () => void setServer('') },
+          { label: t('menu.chooseServer'), click: () => showServerPage('choose') },
+          { label: t('menu.restoreServer', { host: hostOf(DEFAULT_SERVER) }), enabled: !onDefault, click: () => void setServer('') },
           lan
-            ? { label: `Tryb serwera (${hostOf(settings.serverUrl)})`, click: () => switchMode('remote') }
-            : { label: 'Tryb lokalny (sieć LAN)', click: () => switchMode('lan') },
+            ? { label: t('menu.serverMode', { host: hostOf(settings.serverUrl) }), click: () => switchMode('remote') }
+            : { label: t('menu.lanMode'), click: () => switchMode('lan') },
           { type: 'separator' },
-          { label: 'Sprawdź aktualizacje…', click: () => updates?.check(true) },
-          { label: `Wersja ${app.getVersion()}`, enabled: false },
+          { label: t('menu.checkUpdates'), click: () => updates?.check(true) },
+          { label: t('menu.version', { version: app.getVersion() }), enabled: false },
           { type: 'separator' },
-          { role: 'quit', label: 'Zamknij' },
+          { role: 'quit', label: t('menu.quit') },
         ],
       },
       {
-        label: 'Widok',
+        label: t('menu.view'),
         submenu: [
-          { role: 'reload', label: 'Odśwież' },
-          { role: 'togglefullscreen', label: 'Pełny ekran' },
+          { role: 'reload', label: t('menu.reload') },
+          { role: 'togglefullscreen', label: t('menu.fullscreen') },
           { type: 'separator' },
-          { role: 'zoomIn', label: 'Powiększ' },
-          { role: 'zoomOut', label: 'Pomniejsz' },
-          { role: 'resetZoom', label: 'Rzeczywisty rozmiar' },
+          { role: 'zoomIn', label: t('menu.zoomIn') },
+          { role: 'zoomOut', label: t('menu.zoomOut') },
+          { role: 'resetZoom', label: t('menu.resetZoom') },
         ],
       },
     ]),
@@ -324,6 +327,16 @@ function registerIpc() {
   ipcMain.handle('tutaj:switch-mode', guard((mode) => switchMode(mode)));
   ipcMain.handle('tutaj:set-server', guard((url) => setServer(url)));
   ipcMain.handle('tutaj:retry', guard(() => openServer()));
+  // The page's language: menus, dialogs and the app's own pages follow it.
+  ipcMain.handle('tutaj:set-language', guard((lang) => {
+    if (lang !== 'pl' && lang !== 'en') return;
+    if (settings.language !== lang) {
+      settings.language = lang;
+      saveSettings({ language: lang });
+    }
+    setUiLang(lang);
+    buildMenu();
+  }));
   ipcMain.handle('tutaj:overlay-get', guard(() => ({ ...settings.overlay, displays: listDisplays(), hotkeys: settings.hotkeys })));
   ipcMain.handle('tutaj:hotkey-set', guard((name, accelerator) => setHotkey(name, accelerator)));
   // While the user records a new shortcut, the current ones must not fire.
@@ -484,7 +497,7 @@ function overlayWindowOptions() {
     focusable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    title: 'Tutaj — nakładka',
+    title: t('overlay.title'),
     webPreferences: { backgroundThrottling: false },
   };
 }
@@ -565,11 +578,11 @@ const sameKey = (a, b) => a.toLowerCase().replace('commandorcontrol', 'ctrl').re
 
 /** Changes one shortcut (null = default). Refused if invalid, a duplicate, or taken by another app. */
 function setHotkey(name, accelerator) {
-  if (!(name in settings.hotkeys)) return { ok: false, error: 'Nieznany skrót' };
+  if (!(name in settings.hotkeys)) return { ok: false, error: t('hotkey.unknown') };
   const next = accelerator == null ? defaultHotkeys()[name] : accelerator;
-  if (!isAccelerator(next)) return { ok: false, error: 'Nieprawidłowy skrót' };
+  if (!isAccelerator(next)) return { ok: false, error: t('hotkey.invalid') };
   const other = Object.entries(settings.hotkeys).find(([n, a]) => n !== name && sameKey(a, next));
-  if (other) return { ok: false, error: 'Ten skrót jest już używany przez inną akcję' };
+  if (other) return { ok: false, error: t('hotkey.duplicate') };
   unregisterHotkeys();
   let ok = false;
   try {
@@ -583,7 +596,7 @@ function setHotkey(name, accelerator) {
     saveSettings({ hotkeys: settings.hotkeys });
   }
   if (inCall) registerHotkeys();
-  return ok ? { ok: true, hotkeys: settings.hotkeys } : { ok: false, error: 'Ten skrót jest zajęty przez inny program albo nieobsługiwany' };
+  return ok ? { ok: true, hotkeys: settings.hotkeys } : { ok: false, error: t('hotkey.taken') };
 }
 
 async function createWindow() {
@@ -675,6 +688,7 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 // Read last, after every declaration above: loading calls sanitizers that use module constants
 // (a `const` read before its line throws — and the app would not start once settings were saved).
 const settings = loadSettings();
+setUiLang(settings.language);
 
 app.whenReady().then(async () => {
   if (settings.mode === 'lan') {

@@ -14,9 +14,9 @@ export interface QualitySettings {
 
 export type ProfileId = 'call' | 'game';
 
-export const PROFILES: Record<ProfileId, { label: string; settings: QualitySettings }> = {
-  call: { label: 'Rozmowa', settings: { audio: 'voice', resolution: 720, uploadKbps: 0, codec: 'auto' } },
-  game: { label: 'Gra', settings: { audio: 'studio', resolution: 1080, uploadKbps: 4000, codec: 'auto' } },
+export const PROFILES: Record<ProfileId, { settings: QualitySettings }> = {
+  call: { settings: { audio: 'voice', resolution: 720, uploadKbps: 0, codec: 'auto' } },
+  game: { settings: { audio: 'studio', resolution: 1080, uploadKbps: 4000, codec: 'auto' } },
 };
 
 export const UPLOAD_LIMITS = [0, 1500, 3000, 4000, 6000, 10000];

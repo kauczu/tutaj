@@ -2,6 +2,7 @@ import type { LocalMedia } from '../media';
 import { describeMediaError } from '../media';
 import { PROFILES, UPLOAD_LIMITS, hasHardwareH264, profileOf, type ProfileId, type QualitySettings } from '../quality';
 import { h } from './dom';
+import { locale, t } from '../i18n';
 
 const option = (value: string, text: string, selected: boolean): HTMLOptionElement => {
   const o = h('option', { text });
@@ -12,7 +13,7 @@ const option = (value: string, text: string, selected: boolean): HTMLOptionEleme
 
 const field = (label: string, control: HTMLElement): HTMLLabelElement => h('label', {}, label, control);
 
-const mbps = (kbps: number) => `${(kbps / 1000).toLocaleString('pl-PL')} Mb/s`;
+const mbps = (kbps: number) => `${(kbps / 1000).toLocaleString(locale)} Mb/s`;
 
 /**
  * Quality settings: a profile ("Rozmowa" / "Gra") plus the individual knobs behind it.
@@ -35,23 +36,23 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
   const fill = (s: QualitySettings) => {
     const current = profileOf(s);
     profile.replaceChildren(
-      ...(Object.entries(PROFILES) as [ProfileId, (typeof PROFILES)[ProfileId]][]).map(([id, p]) => option(id, p.label, id === current)),
-      option('custom', 'Własny', current === null),
+      ...(Object.entries(PROFILES) as [ProfileId, (typeof PROFILES)[ProfileId]][]).map(([id]) => option(id, t(`q.profile.${id}`), id === current)),
+      option('custom', t('q.profile.custom'), current === null),
     );
     audio.replaceChildren(
-      option('voice', 'Rozmowa — redukcja echa i szumów', s.audio === 'voice'),
-      option('studio', 'Studyjny — stereo 160 kb/s, bez filtrów (słuchawki)', s.audio === 'studio'),
+      option('voice', t('q.audio.voice'), s.audio === 'voice'),
+      option('studio', t('q.audio.studio'), s.audio === 'studio'),
     );
-    resolution.replaceChildren(option('720', '720p', s.resolution === 720), option('1080', '1080p (jeśli kamera pozwala)', s.resolution === 1080));
-    upload.replaceChildren(...UPLOAD_LIMITS.map((k) => option(String(k), k ? mbps(k) : 'Bez limitu', k === s.uploadKbps)));
+    resolution.replaceChildren(option('720', '720p', s.resolution === 720), option('1080', t('q.video.1080'), s.resolution === 1080));
+    upload.replaceChildren(...UPLOAD_LIMITS.map((k) => option(String(k), k ? mbps(k) : t('q.upload.none'), k === s.uploadKbps)));
     codec.replaceChildren(
-      option('auto', 'Automatyczne (sprzętowe, jeśli dostępne)', s.codec === 'auto'),
+      option('auto', t('q.codec.auto'), s.codec === 'auto'),
       option('h264', 'H.264', s.codec === 'h264'),
-      option('vp8', 'VP8 (programowe)', s.codec === 'vp8'),
+      option('vp8', t('q.codec.vp8'), s.codec === 'vp8'),
     );
     const notes: string[] = [];
-    if (s.audio === 'studio') notes.push('Dźwięk studyjny wyłącza redukcję echa — używaj słuchawek, inaczej rozmówcy usłyszą siebie i dźwięk gry.');
-    if (s.uploadKbps) notes.push(`Limit wysyłania chroni ping w grze: rozmowa nie wyśle więcej niż ${mbps(s.uploadKbps)}.`);
+    if (s.audio === 'studio') notes.push(t('q.studioHint'));
+    if (s.uploadKbps) notes.push(t('q.uploadHint', { rate: mbps(s.uploadKbps) }));
     hint.textContent = notes.join(' ');
   };
 
@@ -76,10 +77,10 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
     const hw = await hasHardwareH264();
     encoder.textContent =
       hw === null
-        ? 'Sprawdzanie sprzętowego kodera H.264 — możliwe po włączeniu kamery lub mikrofonu.'
+        ? t('q.hwChecking')
         : hw
-          ? 'Wykryto sprzętowy koder H.264 — obraz koduje karta graficzna, procesor zostaje dla gry.'
-          : 'Nie wykryto sprzętowego kodera H.264 — obraz kodowany programowo.';
+          ? t('q.hwYes')
+          : t('q.hwNo');
     return hw;
   };
   // The encoder is only revealed once the page captures camera/mic: re-check when that starts.
@@ -92,11 +93,11 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
 
   fill(q);
   container.replaceChildren(
-    field('Profil jakości', profile),
-    field('Dźwięk', audio),
-    field('Obraz kamery', resolution),
-    field('Limit wysyłania', upload),
-    field('Kodowanie obrazu', codec),
+    field(t('q.profile'), profile),
+    field(t('q.audio'), audio),
+    field(t('q.video'), resolution),
+    field(t('q.upload'), upload),
+    field(t('q.codec'), codec),
     hint,
     encoder,
   );

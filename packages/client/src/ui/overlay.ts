@@ -1,6 +1,7 @@
 import type { Grid, Tile } from './grid';
 import { icon } from './icons';
 import { REACTION_CSS, floatReaction } from './reactions';
+import { t } from '../i18n';
 
 /** Popup name: the desktop app turns it into a transparent, click-through, always-on-top window. */
 export const OVERLAY_WINDOW_NAME = 'tutaj-overlay';
@@ -122,7 +123,7 @@ export class GameOverlay {
   }
 
   private build(doc: Document): void {
-    doc.title = 'Tutaj — nakładka';
+    doc.title = t('ov.windowTitle');
     const style = doc.createElement('style');
     style.textContent = CSS;
     doc.head.append(style);
@@ -131,7 +132,9 @@ export class GameOverlay {
     const badge = doc.createElement('div');
     badge.className = 'badge';
     badge.id = 'muted-badge';
-    badge.innerHTML = `${icon('micOff')}<span>Mikrofon wyciszony</span>`;
+    badge.innerHTML = icon('micOff');
+    badge.append(doc.createElement('span'));
+    badge.lastElementChild!.textContent = t('ov.micMuted');
     root.append(badge);
     doc.body.replaceChildren(root);
   }

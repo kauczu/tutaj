@@ -13,6 +13,8 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     trace: 'retain-on-failure',
     permissions: ['camera', 'microphone'],
+    // The interface follows the browser language; the tests check the Polish texts (English: i18n.spec).
+    locale: 'pl-PL',
     launchOptions: {
       args: [
         // Synthetic camera (test pattern) and microphone (beep), no permission prompts.

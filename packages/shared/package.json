@@ -1,6 +1,6 @@
 {
   "name": "@tutaj/shared",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Typy protokołu sygnalizacji współdzielone przez klienta i serwer (tylko typy).",
   "types": "protocol.d.ts",

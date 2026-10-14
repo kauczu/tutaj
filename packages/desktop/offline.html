@@ -51,17 +51,48 @@
         <button class="ghost" id="lan">Uruchom tryb lokalny (sieć LAN, bez internetu)</button>
       </div>
       <details id="change">
-        <summary>Zmień serwer</summary>
+        <summary id="change-summary">Zmień serwer</summary>
         <input id="server-url" type="text" placeholder="np. twoja-domena.pl" aria-label="Adres serwera Tutaj" />
         <button class="ghost" id="save-server">Sprawdź i zapisz</button>
-        <p class="hint">Adres zostanie zapisany tylko wtedy, gdy działa pod nim serwer Tutaj.</p>
+        <p class="hint" id="hint">Adres zostanie zapisany tylko wtedy, gdy działa pod nim serwer Tutaj.</p>
         <p class="error" id="server-error" hidden></p>
       </details>
-      <footer>© 2026 Lorem Ipsum · tutaj.eu.org · menu aplikacji: klawisz Alt</footer>
+      <footer id="footer">© 2026 Lorem Ipsum · tutaj.eu.org · menu aplikacji: klawisz Alt</footer>
     </main>
     <script>
       const q = new URLSearchParams(location.search);
       const $ = (id) => document.getElementById(id);
+      const en = q.get('lang') === 'en';
+      const T = en
+        ? {
+            pageTitle: 'Tutaj — no connection', noConn: 'No connection', retry: 'Try again', lan: 'Start local mode (LAN, no internet)',
+            change: 'Change server', placeholder: 'e.g. your-domain.com', address: 'Tutaj server address', save: 'Check and save',
+            hint: 'The address is saved only if a Tutaj server answers there.', footer: '© 2026 Lorem Ipsum · tutaj.eu.org · app menu: Alt key',
+            foreignTitle: 'This is not a Tutaj server', foreign1: 'No Tutaj server runs at ', foreign2: ', so the app did not open it. Choose another server or restore the default one.',
+            checkAgain: 'Check again', chooseTitle: 'Tutaj server', lanRunning: 'The app runs in local mode.', current: 'Current server: ',
+            backToCall: 'Back to the call', backTo: 'Back to {host}', cannot1: 'Cannot connect to the server ', cannot2: '. Check your internet connection and try again.',
+            details: 'Details: ', restore: 'Restore {host}', checking: 'Checking the server…',
+          }
+        : {
+            pageTitle: 'Tutaj — brak połączenia', noConn: 'Brak połączenia', retry: 'Spróbuj ponownie', lan: 'Uruchom tryb lokalny (sieć LAN, bez internetu)',
+            change: 'Zmień serwer', placeholder: 'np. twoja-domena.pl', address: 'Adres serwera Tutaj', save: 'Sprawdź i zapisz',
+            hint: 'Adres zostanie zapisany tylko wtedy, gdy działa pod nim serwer Tutaj.', footer: '© 2026 Lorem Ipsum · tutaj.eu.org · menu aplikacji: klawisz Alt',
+            foreignTitle: 'To nie jest serwer Tutaj', foreign1: 'Pod adresem ', foreign2: ' nie działa serwer Tutaj, więc aplikacja go nie otworzyła. Wybierz inny serwer albo przywróć domyślny.',
+            checkAgain: 'Sprawdź ponownie', chooseTitle: 'Serwer Tutaj', lanRunning: 'Aplikacja działa w trybie lokalnym.', current: 'Bieżący serwer: ',
+            backToCall: 'Wróć do rozmowy', backTo: 'Wróć do {host}', cannot1: 'Nie mogę połączyć się z serwerem ', cannot2: '. Sprawdź internet i spróbuj ponownie.',
+            details: 'Szczegóły: ', restore: 'Przywróć {host}', checking: 'Sprawdzam serwer…',
+          };
+      document.documentElement.lang = en ? 'en' : 'pl';
+      document.title = T.pageTitle;
+      $('title').textContent = T.noConn;
+      $('retry').textContent = T.retry;
+      $('lan').textContent = T.lan;
+      $('change-summary').textContent = T.change;
+      $('server-url').placeholder = T.placeholder;
+      $('server-url').setAttribute('aria-label', T.address);
+      $('save-server').textContent = T.save;
+      $('hint').textContent = T.hint;
+      $('footer').textContent = T.footer;
       const kind = q.get('kind') || 'unreachable';
       const server = q.get('server') || '';
       const def = q.get('default') || '';
@@ -70,24 +101,24 @@
       const strong = (t) => Object.assign(document.createElement('strong'), { textContent: t });
 
       if (kind === 'foreign') {
-        $('title').textContent = 'To nie jest serwer Tutaj';
-        say($('message'), ['Pod adresem ', strong(host(server)), ' nie działa serwer Tutaj, więc aplikacja go nie otworzyła. Wybierz inny serwer albo przywróć domyślny.']);
-        $('retry').textContent = 'Sprawdź ponownie';
+        $('title').textContent = T.foreignTitle;
+        say($('message'), [T.foreign1, strong(host(server)), T.foreign2]);
+        $('retry').textContent = T.checkAgain;
         $('change').open = true;
       } else if (kind === 'choose') {
-        $('title').textContent = 'Serwer Tutaj';
-        say($('message'), [q.get('mode') === 'lan' ? 'Aplikacja działa w trybie lokalnym.' : 'Bieżący serwer: ', ...(q.get('mode') === 'lan' ? [] : [strong(host(server))])]);
-        $('retry').textContent = q.get('mode') === 'lan' ? 'Wróć do rozmowy' : `Wróć do ${host(server)}`;
+        $('title').textContent = T.chooseTitle;
+        say($('message'), [q.get('mode') === 'lan' ? T.lanRunning : T.current, ...(q.get('mode') === 'lan' ? [] : [strong(host(server))])]);
+        $('retry').textContent = q.get('mode') === 'lan' ? T.backToCall : T.backTo.replace('{host}', host(server));
         $('change').open = true;
       } else {
-        say($('message'), ['Nie mogę połączyć się z serwerem ', strong(host(server) || 'Tutaj'), '. Sprawdź internet i spróbuj ponownie.']);
+        say($('message'), [T.cannot1, strong(host(server) || 'Tutaj'), T.cannot2]);
         // Retry on its own when the connection comes back.
         window.addEventListener('online', () => window.tutaj.retry());
       }
-      $('reason').textContent = q.get('reason') ? 'Szczegóły: ' + q.get('reason') : '';
+      $('reason').textContent = q.get('reason') ? T.details + q.get('reason') : '';
       if (def && host(def) !== host(server)) {
         $('reset').hidden = false;
-        $('reset').textContent = `Przywróć ${host(def)}`;
+        $('reset').textContent = T.restore.replace('{host}', host(def));
         $('reset').onclick = () => window.tutaj.setServer('');
       }
       $('retry').onclick = () => window.tutaj.retry();
@@ -99,14 +130,14 @@
         const btn = $('save-server');
         const err = $('server-error');
         btn.disabled = true;
-        btn.textContent = 'Sprawdzam serwer…';
+        btn.textContent = T.checking;
         err.hidden = true;
         const res = await window.tutaj.setServer(urlInput.value);
         if (res && !res.ok) {
           err.textContent = res.error;
           err.hidden = false;
           btn.disabled = false;
-          btn.textContent = 'Sprawdź i zapisz';
+          btn.textContent = T.save;
         }
       };
       $('save-server').onclick = save;

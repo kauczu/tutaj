@@ -293,7 +293,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
             'room-locked': 'Pokój jest zablokowany przez gospodarza — nowe osoby nie mogą dołączyć',
             kicked: `Gospodarz usunął Cię z tego pokoju — możesz wrócić za ${result.minutes ?? 10} min`,
           };
-          return sendError(ws, result.code, messages[result.code]);
+          return send(ws, { type: 'error', code: result.code, message: messages[result.code], minutes: result.minutes });
         }
         // A reconnecting host keeps the role.
         if (resumedHost) rooms.setHost(msg.room, client.id);

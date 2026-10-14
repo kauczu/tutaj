@@ -16,10 +16,16 @@
     </style>
   </head>
   <body>
-    <h1>Co chcesz udostępnić?</h1>
+    <h1 id="title">Co chcesz udostępnić?</h1>
     <div class="list" id="list"></div>
     <button class="cancel" id="cancel">Anuluj</button>
     <script>
+      if (new URLSearchParams(location.search).get('lang') === 'en') {
+        document.documentElement.lang = 'en';
+        document.title = 'Choose a screen or window';
+        document.getElementById('title').textContent = 'What do you want to share?';
+        document.getElementById('cancel').textContent = 'Cancel';
+      }
       const list = document.getElementById('list');
       document.getElementById('cancel').onclick = () => window.picker.choose(null);
       window.picker.sources().then((sources) => {

@@ -1,4 +1,5 @@
 // Global shortcuts of the desktop app: recording a key combination as an Electron accelerator.
+import { t } from '../i18n';
 
 export type HotkeyName = 'overlay' | 'mute' | 'window';
 export type Hotkeys = Record<HotkeyName, string>;
@@ -54,10 +55,10 @@ export type Recorded = { accelerator: string } | { error: string } | null;
 export function acceleratorFromEvent(e: KeyboardEvent): Recorded {
   if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(e.key)) return null;
   const key = keyName(e.code);
-  if (!key) return { error: 'Tego klawisza nie można użyć w skrócie' };
+  if (!key) return { error: t('hk.badKey') };
   const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter((m): m is string => !!m);
   const strong = e.ctrlKey || e.altKey || e.metaKey;
-  if (!strong && !/^F\d+$/.test(key)) return { error: 'Użyj Ctrl, Alt lub Win z innym klawiszem (albo klawisza F1–F24)' };
+  if (!strong && !/^F\d+$/.test(key)) return { error: t('hk.needModifier') };
   return { accelerator: [...mods, key].join('+') };
 }
 

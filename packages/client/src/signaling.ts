@@ -1,5 +1,6 @@
 import type { ClientMessage, ServerMessage, SfuMethod } from '@tutaj/shared';
 import { Emitter } from './emitter';
+import { t } from './i18n';
 
 type SignalingEvents = {
   message: ServerMessage;
@@ -43,7 +44,7 @@ export class Signaling extends Emitter<SignalingEvents> {
       const ws = new WebSocket(this.url);
       this.ws = ws;
       let settled = false;
-      const timer = setTimeout(() => fail(new Error('Przekroczono czas łączenia z serwerem')), timeoutMs);
+      const timer = setTimeout(() => fail(new Error(t('error.connectTimeout'))), timeoutMs);
       const fail = (err: Error) => {
         if (settled) return;
         settled = true;
@@ -56,7 +57,7 @@ export class Signaling extends Emitter<SignalingEvents> {
         clearTimeout(timer);
         resolve();
       };
-      ws.onerror = () => fail(new Error(`Nie można połączyć z serwerem sygnalizacji (${this.url})`));
+      ws.onerror = () => fail(new Error(t('error.cannotConnect', { url: this.url })));
       ws.onmessage = (e) => {
         if (typeof e.data !== 'string') return;
         let msg: ServerMessage;
@@ -70,7 +71,7 @@ export class Signaling extends Emitter<SignalingEvents> {
       };
       ws.onclose = (e) => {
         this.rejectAll();
-        if (!settled) fail(new Error(`Nie można połączyć z serwerem sygnalizacji (${this.url})`));
+        if (!settled) fail(new Error(t('error.cannotConnect', { url: this.url })));
         else if (this.ws === ws) this.emit('close', { code: e.code });
       };
     });
@@ -83,11 +84,11 @@ export class Signaling extends Emitter<SignalingEvents> {
   /** Request/response call to the server's SFU. */
   request<T>(method: SfuMethod, data?: Record<string, unknown>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      if (this.ws?.readyState !== WebSocket.OPEN) return reject(new Error('Brak połączenia z serwerem'));
+      if (this.ws?.readyState !== WebSocket.OPEN) return reject(new Error(t('error.notConnected')));
       const id = this.nextId++;
       const timer = window.setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`SFU: brak odpowiedzi (${method})`));
+        reject(new Error(t('error.sfuTimeout', { method })));
       }, REQUEST_TIMEOUT_MS);
       this.pending.set(id, { resolve: resolve as (d: unknown) => void, reject, timer });
       this.send({ type: 'sfu', id, method, data });
@@ -114,7 +115,7 @@ export class Signaling extends Emitter<SignalingEvents> {
   private rejectAll(): void {
     for (const p of this.pending.values()) {
       clearTimeout(p.timer);
-      p.reject(new Error('Brak połączenia z serwerem'));
+      p.reject(new Error(t('error.notConnected')));
     }
     this.pending.clear();
   }

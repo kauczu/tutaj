@@ -1,4 +1,5 @@
 import './style.css';
+import { lang, languagePreference, setLanguagePreference, t, translateDocument, type LangPreference } from './i18n';
 import { SpeakingDetector } from './audio';
 import { APP_VERSION, BRAND } from './brand';
 import { LocalMedia, describeMediaError } from './media';
@@ -48,6 +49,8 @@ interface DesktopBridge {
   /** Enables the global shortcuts for the duration of a call. */
   setInCall?(inCall: boolean): Promise<void>;
   onHotkey?(cb: (name: 'overlay' | 'mute' | 'window') => void): () => void;
+  /** Tells the app the page's language (menus, dialogs, update window follow it). */
+  setLanguage?(lang: 'pl' | 'en'): Promise<void>;
 }
 declare global {
   interface Window {
@@ -116,11 +119,16 @@ function refreshPreview(): void {
 }
 
 async function refreshDevices(): Promise<void> {
-  fillDeviceSelect(audioSelect, await LocalMedia.devices('audioinput'), media.audioDeviceId, 'Mikrofon');
-  fillDeviceSelect(videoSelect, await LocalMedia.devices('videoinput'), media.videoDeviceId, 'Kamera');
+  fillDeviceSelect(audioSelect, await LocalMedia.devices('audioinput'), media.audioDeviceId, t('lobby.mic'));
+  fillDeviceSelect(videoSelect, await LocalMedia.devices('videoinput'), media.videoDeviceId, t('lobby.camera'));
 }
 
 async function initLobby(): Promise<void> {
+  translateDocument();
+  const languageSelect = $<HTMLSelectElement>('language');
+  languageSelect.value = languagePreference();
+  languageSelect.onchange = () => setLanguagePreference(languageSelect.value as LangPreference);
+  void window.tutaj?.setLanguage?.(lang).catch(() => {});
   const params = new URLSearchParams(location.search);
   nameInput.value = store.get('name');
   // An invitation link wins; otherwise the room used last time.
@@ -139,7 +147,7 @@ async function initLobby(): Promise<void> {
     /* no storage */
   }
   renderQualityForm($('quality-lobby'), media, (msg) => showError(msg));
-  if (params.get('room')) joinBtn.textContent = `Dołącz do „${params.get('room')}”`;
+  if (params.get('room')) joinBtn.textContent = t('lobby.joinRoom', { room: params.get('room') ?? '' });
 
   $('random-room').addEventListener('click', () => (roomInput.value = randomRoom()));
   media.on('change', refreshPreview);
@@ -149,7 +157,7 @@ async function initLobby(): Promise<void> {
       try {
         await media.setMicrophone(media.audioDeviceId);
       } catch (e) {
-        return showError(`Mikrofon: ${describeMediaError(e)}`);
+        return showError(t('media.micProblem', { error: describeMediaError(e) }));
       }
     } else media.setAudioEnabled(!media.audioEnabled);
     refreshPreview();
@@ -158,7 +166,7 @@ async function initLobby(): Promise<void> {
     try {
       await media.setCamera(!media.cameraOn);
     } catch (e) {
-      showError(`Kamera: ${describeMediaError(e)}`);
+      showError(t('media.cameraProblem', { error: describeMediaError(e) }));
     }
   });
   audioSelect.addEventListener('change', () => {
@@ -179,7 +187,7 @@ async function initLobby(): Promise<void> {
   void showDesktopInfo();
 
   const problems = await media.start(true, true);
-  if (problems.length) showError(`${problems.join('. ')}. Możesz dołączyć bez nich.`);
+  if (problems.length) showError(t('lobby.canJoinWithout', { problems: problems.join('. ') }));
   try {
     detector = new SpeakingDetector((_id, _speaking, level) => {
       meter.style.width = `${Math.min(100, level * 400)}%`;
@@ -204,7 +212,7 @@ function helpLink(): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'link';
-  b.textContent = 'Pomoc';
+  b.textContent = t('lobby.help');
   b.onclick = () => void showHelp();
   return b;
 }
@@ -214,8 +222,8 @@ function helpLink(): HTMLButtonElement {
  * The page comes from the server, so APP_VERSION is the server's version; the desktop app has its own.
  */
 function renderBranding(desktopVersion?: string): void {
-  const versions = desktopVersion ? `serwer v${APP_VERSION} · aplikacja v${desktopVersion}` : `v${APP_VERSION}`;
-  $('tagline').textContent = BRAND.tagline;
+  const versions = desktopVersion ? t('lobby.versions', { server: APP_VERSION, app: desktopVersion }) : `v${APP_VERSION}`;
+  $('tagline').textContent = t('lobby.tagline');
   const repoLabel = BRAND.repoUrl.replace(/^https:\/\//, '');
   $('lobby-footer').replaceChildren(
     `© ${BRAND.year} `,
@@ -237,8 +245,8 @@ function renderBranding(desktopVersion?: string): void {
   $('about').replaceChildren(
     logo,
     p(`${BRAND.name} ${versions} · © ${BRAND.year} `, link(BRAND.author, BRAND.authorUrl)),
-    p('Kod źródłowy: ', link(repoLabel, BRAND.repoUrl), ` (${BRAND.license})`),
-    p('Nazwa, logo i grafika: wszelkie prawa zastrzeżone.'),
+    p(t('lobby.sourceCode'), link(repoLabel, BRAND.repoUrl), ` (${BRAND.license})`),
+    p(t('lobby.brandRights')),
   );
 }
 
@@ -249,35 +257,35 @@ function serverChanger(bridge: DesktopBridge, info: DesktopInfo): HTMLElement {
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'ghost host-switch';
-  toggle.textContent = 'Zmień serwer…';
+  toggle.textContent = t('desk.changeServer');
   const form = document.createElement('div');
   form.className = 'server-form';
   form.hidden = true;
   const input = document.createElement('input');
   input.type = 'text';
   input.value = info.serverUrl;
-  input.placeholder = 'np. twoja-domena.pl';
-  input.setAttribute('aria-label', 'Adres serwera Tutaj');
+  input.placeholder = t('desk.serverPlaceholder');
+  input.setAttribute('aria-label', t('desk.serverAddress'));
   const save = document.createElement('button');
   save.type = 'button';
   save.className = 'primary';
-  save.textContent = 'Sprawdź i zapisz';
+  save.textContent = t('desk.checkSave');
   const hint = document.createElement('p');
   hint.className = 'muted server-hint';
-  hint.textContent = 'Adres zostanie zapisany tylko wtedy, gdy działa pod nim serwer Tutaj.';
+  hint.textContent = t('desk.serverHint');
   const msg = document.createElement('p');
   msg.className = 'error';
   msg.hidden = true;
   const apply = async (url: string) => {
     save.disabled = true;
-    save.textContent = 'Sprawdzam serwer…';
+    save.textContent = t('desk.checking');
     msg.hidden = true;
     const res = await bridge.setServer!(url);
     if (!res.ok) {
-      msg.textContent = res.error ?? 'Nieprawidłowy adres';
+      msg.textContent = res.error ?? t('desk.badAddress');
       msg.hidden = false;
       save.disabled = false;
-      save.textContent = 'Sprawdź i zapisz';
+      save.textContent = t('desk.checkSave');
     }
   };
   save.onclick = () => void apply(input.value);
@@ -292,7 +300,7 @@ function serverChanger(bridge: DesktopBridge, info: DesktopInfo): HTMLElement {
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'ghost';
-    reset.textContent = `Przywróć ${new URL(info.defaultServer).host}`;
+    reset.textContent = t('desk.restore', { host: new URL(info.defaultServer).host });
     reset.onclick = () => void apply('');
     form.append(reset);
   }
@@ -314,7 +322,7 @@ async function showDesktopInfo(): Promise<void> {
   details.hidden = false;
   // In LAN mode the addresses for the others matter right away.
   details.open = info.mode === 'lan';
-  $('host-summary').textContent = info.mode === 'lan' ? 'Serwer i sieć — tryb lokalny (LAN)' : `Serwer i sieć — ${new URL(info.serverUrl).host}`;
+  $('host-summary').textContent = info.mode === 'lan' ? t('desk.networkLan') : t('desk.networkServer', { host: new URL(info.serverUrl).host });
   const box = $('host-info');
   box.replaceChildren();
   const title = document.createElement('strong');
@@ -324,24 +332,27 @@ async function showDesktopInfo(): Promise<void> {
   const serverHost = new URL(info.serverUrl).host;
 
   if (info.mode === 'remote') {
-    title.textContent = `Połączono z serwerem ${serverHost}.`;
-    box.append(title, document.createElement('br'), 'Bez internetu możesz poprowadzić rozmowę w sieci lokalnej — ta aplikacja stanie się jej serwerem.');
-    switchBtn.textContent = 'Przełącz na tryb lokalny (sieć LAN)';
+    title.textContent = t('desk.connected', { host: serverHost });
+    box.append(title, document.createElement('br'), t('desk.offlineHint'));
+    switchBtn.textContent = t('desk.toLan');
     switchBtn.onclick = () => void bridge.switchMode('lan');
     if (bridge.setServer) box.append(serverChanger(bridge, info));
     // The app is dedicated to its server; a custom signaling server makes no sense here.
     $('server').closest('label')?.setAttribute('hidden', '');
   } else {
-    title.textContent = 'Tryb lokalny: ta aplikacja jest serwerem w sieci lokalnej.';
+    title.textContent = t('desk.lanTitle');
     const lan = info.lan;
     box.append(
       title,
       document.createElement('br'),
       lan?.lanUrls.length
-        ? `Inni w tej samej sieci dołączą przez przeglądarkę: ${lan.lanUrls.join(' lub ')} (zaakceptuj certyfikat) albo z aplikacji desktopowej w trybie lokalnym, wpisując ${lan.lanUrls[0].replace(/^https:\/\/([^:]+):\d+/, `$1:${lan.httpPort}`)} jako serwer.`
-        : 'Nie wykryto sieci lokalnej.',
+        ? t('desk.lanHow', {
+            urls: lan.lanUrls.join(t('desk.lanOr')),
+            server: lan.lanUrls[0].replace(/^https:\/\/([^:]+):\d+/, `$1:${lan.httpPort}`),
+          })
+        : t('desk.noLan'),
     );
-    switchBtn.textContent = `Wróć do serwera ${serverHost}`;
+    switchBtn.textContent = t('desk.backToServer', { host: serverHost });
     switchBtn.onclick = () => void bridge.switchMode('remote');
   }
   box.append(switchBtn);
@@ -352,13 +363,13 @@ async function join(): Promise<void> {
   const name = nameInput.value.trim();
   const roomId = roomInput.value.trim().toLowerCase();
   if (!name || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(roomId)) {
-    return showError('Podaj imię i nazwę pokoju (litery, cyfry, - i _).');
+    return showError(t('lobby.badNameRoom'));
   }
   let url: string;
   try {
     url = signalingUrl(serverInput.value);
   } catch {
-    return showError('Nieprawidłowy adres serwera.');
+    return showError(t('lobby.badServer'));
   }
   store.set('name', name);
   store.set('room', roomId);
@@ -366,7 +377,7 @@ async function join(): Promise<void> {
   store.set('ownerKey', ownerKeyInput.value.trim());
 
   joinBtn.disabled = true;
-  joinBtn.textContent = 'Łączenie…';
+  joinBtn.textContent = t('lobby.joining');
   try {
     detector?.destroy();
     detector = null;
@@ -391,7 +402,7 @@ async function join(): Promise<void> {
   } catch (err) {
     showError(err instanceof Error ? err.message : String(err));
     joinBtn.disabled = false;
-    joinBtn.textContent = 'Dołącz';
+    joinBtn.textContent = t('lobby.join');
     try {
       detector = new SpeakingDetector((_id, _s, level) => (meter.style.width = `${Math.min(100, level * 400)}%`));
       detector.watch('preview', media.audioTrack);

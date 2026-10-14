@@ -1,6 +1,7 @@
 import { formatBytes } from '../files';
 import { $, h, linkify } from './dom';
 import { setIcon } from './icons';
+import { t } from '../i18n';
 
 export interface TransferHandle {
   progress(done: number): void;
@@ -92,7 +93,7 @@ export class ChatPanel {
       h(
         'li',
         { class: `file ${self ? 'self' : ''}` },
-        h('div', { class: 'meta' }, h('strong', { text: from }), self ? ' · wysyłanie' : ' · plik'),
+        h('div', { class: 'meta' }, h('strong', { text: from }), self ? t('chat.sending') : t('chat.fileLabel')),
         h('div', { class: 'file-row' }, title, status),
         bar,
       ),
@@ -112,12 +113,12 @@ export class ChatPanel {
           a.download = name;
           title.replaceWith(a);
         } else {
-          status.textContent += ' · wysłano';
+          status.textContent += t('chat.sent');
         }
       },
       fail: (reason) => {
         bar.remove();
-        status.textContent = `błąd: ${reason}`;
+        status.textContent = t('chat.error', { reason });
         status.classList.add('error');
       },
     };

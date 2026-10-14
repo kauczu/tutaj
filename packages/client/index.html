@@ -20,53 +20,60 @@
           <img class="brand-icon" src="/icon.svg" alt="" width="52" height="52" />
           <div>
             <h1><img class="brand-logo" src="/logo.webp" alt="Tutaj.eu.org by Lorem Ipsum" width="720" height="512" /></h1>
-            <p id="tagline">Spójna platforma komunikacyjna.</p>
+            <p id="tagline" data-i18n="lobby.tagline">Spójna platforma komunikacyjna.</p>
           </div>
         </header>
 
         <div class="preview">
           <video id="preview-video" autoplay playsinline muted></video>
-          <div id="preview-placeholder" class="preview-placeholder">Kamera wyłączona</div>
+          <div id="preview-placeholder" class="preview-placeholder" data-i18n="lobby.cameraOff">Kamera wyłączona</div>
           <div class="preview-controls">
-            <button id="preview-mic" class="round" type="button" aria-pressed="true" title="Mikrofon"></button>
-            <button id="preview-cam" class="round" type="button" aria-pressed="true" title="Kamera"></button>
+            <button id="preview-mic" class="round" type="button" aria-pressed="true" title="Mikrofon" data-i18n-title="lobby.mic"></button>
+            <button id="preview-cam" class="round" type="button" aria-pressed="true" title="Kamera" data-i18n-title="lobby.camera"></button>
           </div>
           <div id="preview-meter" class="meter"><span></span></div>
         </div>
 
         <form id="join-form" class="join-form" autocomplete="on">
-          <label>Twoje imię
-            <input id="name" name="name" required maxlength="40" placeholder="np. Ania" autocomplete="nickname" />
+          <label><span data-i18n="lobby.name">Twoje imię</span>
+            <input id="name" name="name" required maxlength="40" placeholder="np. Ania" data-i18n-placeholder="lobby.namePlaceholder" autocomplete="nickname" />
           </label>
-          <label>Pokój
+          <label><span data-i18n="lobby.room">Pokój</span>
             <div class="row">
-              <input id="room" name="room" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" title="Litery, cyfry, - i _" />
-              <button id="random-room" type="button" class="ghost" title="Losowa nazwa">↻</button>
+              <input id="room" name="room" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" title="Litery, cyfry, - i _" data-i18n-title="lobby.roomPattern" />
+              <button id="random-room" type="button" class="ghost" title="Losowa nazwa" data-i18n-title="lobby.randomRoom">↻</button>
             </div>
           </label>
 
           <details>
-            <summary>Urządzenia, jakość i ustawienia zaawansowane</summary>
-            <label>Mikrofon <select id="audio-input"></select></label>
-            <label>Kamera <select id="video-input"></select></label>
+            <summary data-i18n="lobby.advanced">Urządzenia, jakość i ustawienia zaawansowane</summary>
+            <label><span data-i18n="lobby.language">Język</span>
+              <select id="language">
+                <option value="auto" data-i18n="lobby.languageAuto">Automatycznie</option>
+                <option value="pl">Polski</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label><span data-i18n="lobby.mic">Mikrofon</span> <select id="audio-input"></select></label>
+            <label><span data-i18n="lobby.camera">Kamera</span> <select id="video-input"></select></label>
             <fieldset id="quality-lobby" class="quality"></fieldset>
-            <label>Hasło pokoju (opcjonalnie)
-              <input id="password" type="password" maxlength="128" autocomplete="off" placeholder="ustala je pierwsza osoba w pokoju" />
+            <label><span data-i18n="lobby.password">Hasło pokoju (opcjonalnie)</span>
+              <input id="password" type="password" maxlength="128" autocomplete="off" placeholder="ustala je pierwsza osoba w pokoju" data-i18n-placeholder="lobby.passwordPlaceholder" />
             </label>
-            <label>Serwer sygnalizacji
-              <input id="server" maxlength="200" placeholder="domyślnie: ten sam co strona (np. 192.168.1.5:3000)" />
+            <label><span data-i18n="lobby.server">Serwer sygnalizacji</span>
+              <input id="server" maxlength="200" placeholder="domyślnie: ten sam co strona (np. 192.168.1.5:3000)" data-i18n-placeholder="lobby.serverPlaceholder" />
             </label>
-            <label>Klucz właściciela serwera (opcjonalnie)
-              <input id="owner-key" type="password" maxlength="256" autocomplete="off" placeholder="zdejmuje limity — tylko dla właściciela" />
+            <label><span data-i18n="lobby.ownerKey">Klucz właściciela serwera (opcjonalnie)</span>
+              <input id="owner-key" type="password" maxlength="256" autocomplete="off" placeholder="zdejmuje limity — tylko dla właściciela" data-i18n-placeholder="lobby.ownerKeyPlaceholder" />
             </label>
           </details>
 
           <details id="host-details" class="host-details" hidden>
-            <summary id="host-summary">Serwer i sieć</summary>
+            <summary id="host-summary" data-i18n="desk.network">Serwer i sieć</summary>
             <div id="host-info" class="host-info"></div>
           </details>
           <p id="lobby-error" class="error" role="alert" hidden></p>
-          <button id="join" class="primary" type="submit">Dołącz</button>
+          <button id="join" class="primary" type="submit" data-i18n="lobby.join">Dołącz</button>
         </form>
       </section>
       <footer id="lobby-footer" class="lobby-footer"></footer>
@@ -84,15 +91,15 @@
 
       <aside id="chat" class="chat" hidden>
         <header>
-          <h2>Czat</h2>
-          <button id="chat-close" class="ghost" type="button" title="Zamknij">✕</button>
+          <h2 data-i18n="chat.title">Czat</h2>
+          <button id="chat-close" class="ghost" type="button" title="Zamknij" data-i18n-title="chat.close">✕</button>
         </header>
         <ol id="chat-list" class="chat-list" aria-live="polite"></ol>
         <form id="chat-form" class="chat-form">
-          <button id="chat-file" class="ghost" type="button" title="Wyślij plik"></button>
+          <button id="chat-file" class="ghost" type="button" title="Wyślij plik" data-i18n-title="chat.file"></button>
           <input id="chat-file-input" type="file" multiple hidden />
-          <input id="chat-input" maxlength="2000" placeholder="Napisz wiadomość…" autocomplete="off" />
-          <button class="primary" type="submit">Wyślij</button>
+          <input id="chat-input" maxlength="2000" placeholder="Napisz wiadomość…" data-i18n-placeholder="chat.placeholder" autocomplete="off" />
+          <button class="primary" type="submit" data-i18n="chat.send">Wyślij</button>
         </form>
       </aside>
 
@@ -102,40 +109,40 @@
           <span id="mode-badge" class="mode-badge mesh">P2P</span>
           <span id="e2ee-badge" class="mode-badge e2ee" hidden>E2EE</span>
           <span id="encoder-badge" class="mode-badge" hidden></span>
-          <span id="locked-badge" class="mode-badge locked" title="Pokój zablokowany przez gospodarza — nowe osoby nie dołączą" hidden>🔒</span>
+          <span id="locked-badge" class="mode-badge locked" title="Pokój zablokowany przez gospodarza — nowe osoby nie dołączą" data-i18n-title="mod.lockedBadge" hidden>🔒</span>
           <span id="timer">00:00</span>
         </div>
         <div class="buttons">
-          <button id="btn-mic" class="round" type="button" title="Mikrofon (M)"></button>
-          <button id="btn-cam" class="round" type="button" title="Kamera (V)"></button>
-          <button id="btn-screen" class="round" type="button" title="Udostępnij ekran (S)"></button>
-          <button id="btn-hand" class="round" type="button" title="Podnieś rękę (H)"></button>
-          <button id="btn-react" class="round" type="button" title="Reakcja (R, potem 1–6)" aria-haspopup="true" aria-expanded="false"></button>
-          <button id="btn-chat" class="round" type="button" title="Czat (C)"><span id="chat-badge" class="badge" hidden></span></button>
-          <button id="btn-overlay" class="round" type="button" title="Nakładka na grę" hidden></button>
-          <button id="btn-record" class="round" type="button" title="Nagrywaj lokalnie"></button>
-          <button id="btn-settings" class="round" type="button" title="Ustawienia"></button>
-          <button id="btn-leave" class="round danger" type="button" title="Opuść"></button>
+          <button id="btn-mic" class="round" type="button" title="Mikrofon (M)" data-i18n-title="ctl.mic"></button>
+          <button id="btn-cam" class="round" type="button" title="Kamera (V)" data-i18n-title="ctl.cam"></button>
+          <button id="btn-screen" class="round" type="button" title="Udostępnij ekran (S)" data-i18n-title="ctl.screen"></button>
+          <button id="btn-hand" class="round" type="button" title="Podnieś rękę (H)" data-i18n-title="ctl.hand"></button>
+          <button id="btn-react" class="round" type="button" title="Reakcja (R, potem 1–6)" data-i18n-title="ctl.react" aria-haspopup="true" aria-expanded="false"></button>
+          <button id="btn-chat" class="round" type="button" title="Czat (C)" data-i18n-title="ctl.chat"><span id="chat-badge" class="badge" hidden></span></button>
+          <button id="btn-overlay" class="round" type="button" title="Nakładka na grę" data-i18n-title="ctl.overlay" hidden></button>
+          <button id="btn-record" class="round" type="button" title="Nagrywaj lokalnie" data-i18n-title="ctl.record"></button>
+          <button id="btn-settings" class="round" type="button" title="Ustawienia" data-i18n-title="ctl.settings"></button>
+          <button id="btn-leave" class="round danger" type="button" title="Opuść" data-i18n-title="ctl.leave"></button>
         </div>
         <div class="room-actions">
-          <button id="btn-invite" class="ghost" type="button">Kopiuj zaproszenie</button>
+          <button id="btn-invite" class="ghost" type="button" data-i18n="ctl.invite">Kopiuj zaproszenie</button>
         </div>
       </footer>
 
       <dialog id="settings">
         <form method="dialog" class="settings-form">
           <div class="dialog-head">
-            <h2>Ustawienia</h2>
-            <button id="open-help" class="ghost" type="button" title="Skrócona instrukcja obsługi (F1)">Pomoc</button>
+            <h2 data-i18n="set.title">Ustawienia</h2>
+            <button id="open-help" class="ghost" type="button" title="Skrócona instrukcja obsługi (F1)" data-i18n-title="set.helpTitle" data-i18n="set.help">Pomoc</button>
           </div>
-          <label>Mikrofon <select id="set-audio-input"></select></label>
-          <label>Kamera <select id="set-video-input"></select></label>
-          <label id="set-audio-output-wrap">Głośnik <select id="set-audio-output"></select></label>
-          <label>Tryb mediów
+          <label><span data-i18n="set.mic">Mikrofon</span> <select id="set-audio-input"></select></label>
+          <label><span data-i18n="set.camera">Kamera</span> <select id="set-video-input"></select></label>
+          <label id="set-audio-output-wrap"><span data-i18n="set.speaker">Głośnik</span> <select id="set-audio-output"></select></label>
+          <label><span data-i18n="set.mode">Tryb mediów</span>
             <select id="set-mode">
-              <option value="auto">Automatyczny</option>
-              <option value="mesh">P2P (bezpośrednio)</option>
-              <option value="sfu">SFU (przez serwer)</option>
+              <option value="auto" data-i18n="set.modeAuto">Automatyczny</option>
+              <option value="mesh" data-i18n="set.modeMesh">P2P (bezpośrednio)</option>
+              <option value="sfu" data-i18n="set.modeSfu">SFU (przez serwer)</option>
             </select>
           </label>
           <p id="mode-info" class="muted small"></p>
@@ -144,17 +151,17 @@
           <fieldset id="quality-room" class="quality"></fieldset>
           <p id="send-stats" class="send-stats small" hidden></p>
           <div id="peer-stats" class="peer-stats"></div>
-          <section id="about" class="about" aria-label="O aplikacji"></section>
-          <button class="primary" value="close">Zamknij</button>
+          <section id="about" class="about" aria-label="O aplikacji" data-i18n-aria-label="about.label"></section>
+          <button class="primary" value="close" data-i18n="set.close">Zamknij</button>
         </form>
       </dialog>
     </main>
 
     <dialog id="help" class="help-dialog" aria-labelledby="help-title">
       <form method="dialog" class="help">
-        <h2 id="help-title">Pomoc — jak używać Tutaj</h2>
+        <h2 id="help-title" data-i18n="help.title">Pomoc — jak używać Tutaj</h2>
         <div id="help-body" class="help-body"></div>
-        <button class="primary" value="close">Zamknij</button>
+        <button class="primary" value="close" data-i18n="set.close">Zamknij</button>
       </form>
     </dialog>
 

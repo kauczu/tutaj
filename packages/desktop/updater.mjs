@@ -8,6 +8,7 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import updater from 'electron-updater';
+import { t, uiLang } from './i18n.mjs';
 
 const { autoUpdater, CancellationToken } = updater;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +49,7 @@ export function initUpdater(ctx) {
   };
   const ask = async (options) => {
     const w = win();
-    const opts = { type: 'info', title: 'Aktualizacja Tutaj', noLink: true, ...options };
+    const opts = { type: 'info', title: t('update.title'), noLink: true, ...options };
     return (w ? dialog.showMessageBox(w, opts) : dialog.showMessageBox(opts)).then((r) => r.response);
   };
 
@@ -65,11 +66,9 @@ export function initUpdater(ctx) {
   autoUpdater.on('update-available', async (info) => {
     if (!manual && ctx.skipped() === info.version) return;
     const choice = await ask({
-      message: `Dostępna jest nowa wersja Tutaj: ${info.version}`,
-      detail:
-        `Masz wersję ${app.getVersion()}. Aktualizacja pobierze się teraz (postęp w osobnym okienku), ` +
-        'a potem aplikacja zainstaluje ją i uruchomi się ponownie.\n\nCo nowego: github.com/kauczu/tutaj/releases',
-      buttons: ['Aktualizuj', 'Później', 'Pomiń tę wersję'],
+      message: t('update.available', { version: info.version }),
+      detail: t('update.availableDetail', { current: app.getVersion() }),
+      buttons: [t('update.now'), t('update.later'), t('update.skip')],
       defaultId: 0,
       cancelId: 1,
     });
@@ -84,7 +83,7 @@ export function initUpdater(ctx) {
   });
 
   autoUpdater.on('update-not-available', () => {
-    if (manual) void ask({ message: `Masz najnowszą wersję Tutaj (${app.getVersion()}).`, buttons: ['OK'] });
+    if (manual) void ask({ message: t('update.upToDate', { version: app.getVersion() }), buttons: ['OK'] });
   });
 
   autoUpdater.on('download-progress', (p) => {
@@ -100,9 +99,9 @@ export function initUpdater(ctx) {
     if (!ctx.inCall()) return install();
     // Installing restarts the app — never cut a call without asking.
     const choice = await ask({
-      message: `Wersja ${info.version} jest gotowa do instalacji.`,
-      detail: 'Instalacja zakończy trwającą rozmowę i uruchomi aplikację ponownie.',
-      buttons: ['Zainstaluj teraz', 'Po zamknięciu aplikacji'],
+      message: t('update.ready', { version: info.version }),
+      detail: t('update.readyDetail'),
+      buttons: [t('update.installNow'), t('update.onQuit')],
       defaultId: 1,
       cancelId: 1,
     });
@@ -119,7 +118,7 @@ export function initUpdater(ctx) {
     console.warn('[updater]', err?.message ?? err);
     const message = String(err?.message ?? err).split('\n')[0];
     if (progress.isOpen()) progress.show({ state: 'error', message });
-    else if (manual) void ask({ type: 'error', message: 'Nie udało się sprawdzić lub pobrać aktualizacji.', detail: message, buttons: ['OK'] });
+    else if (manual) void ask({ type: 'error', message: t('update.failed'), detail: message, buttons: ['OK'] });
   };
   autoUpdater.on('error', failed);
 
@@ -163,7 +162,7 @@ function createProgressWindow(parent) {
       maximizable: false,
       fullscreenable: false,
       show: false,
-      title: 'Aktualizacja Tutaj',
+      title: t('update.title'),
       backgroundColor: '#02060c',
       autoHideMenuBar: true,
       ...(app.isPackaged ? {} : { icon: join(here, 'build', 'icon.png') }),
@@ -172,7 +171,7 @@ function createProgressWindow(parent) {
     win.setMenu(null);
     win.webContents.on('did-finish-load', send);
     win.once('ready-to-show', () => win?.show());
-    void win.loadFile(join(here, 'update-progress.html'));
+    void win.loadFile(join(here, 'update-progress.html'), { query: { lang: uiLang() } });
     win.on('closed', () => (win = null));
     return win;
   };
@@ -199,6 +198,6 @@ function createProgressWindow(parent) {
 
 function notPackaged(ctx) {
   const w = ctx.window();
-  const opts = { type: 'info', title: 'Aktualizacja Tutaj', message: 'Aktualizacje działają w zainstalowanej aplikacji (nie w trybie deweloperskim).', buttons: ['OK'] };
+  const opts = { type: 'info', title: t('update.title'), message: t('update.devOnly'), buttons: ['OK'] };
   void (w ? dialog.showMessageBox(w, opts) : dialog.showMessageBox(opts));
 }
