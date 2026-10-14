@@ -43,5 +43,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" packages/desktop/release/Tutaj-Setup-*.exe \
+          # latest.yml + .blockmap: the desktop app's updater finds and verifies new versions with them.
+          gh release create "$GITHUB_REF_NAME" \
+            packages/desktop/release/Tutaj-Setup-*.exe \
+            packages/desktop/release/Tutaj-Setup-*.exe.blockmap \
+            packages/desktop/release/latest.yml \
             --title "Tutaj $GITHUB_REF_NAME" --generate-notes

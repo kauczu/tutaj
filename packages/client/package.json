@@ -1,6 +1,6 @@
 {
   "name": "@tutaj/client",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@tutaj/shared": "0.3.0",
+    "@tutaj/shared": "0.3.1",
     "vite": "7.3.6"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 {
   "name": "@tutaj/desktop",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Tutaj — wideorozmowy dla 2–4 osób. Aplikacja z wbudowanym serwerem (host w sieci LAN).",
   "author": "Lorem Ipsum (https://tutaj.eu.org)",
@@ -12,7 +12,8 @@
     "pack": "electron-builder --win dir --x64 --publish never"
   },
   "dependencies": {
-    "@tutaj/server": "0.3.0"
+    "@tutaj/server": "0.3.1",
+    "electron-updater": "6.8.10"
   },
   "devDependencies": {
     "electron": "44.4.5",
@@ -28,6 +29,7 @@
     },
     "files": [
       "main.mjs",
+      "updater.mjs",
       "preload.cjs",
       "picker-preload.cjs",
       "picker.html",
@@ -60,7 +62,15 @@
       "uninstallerIcon": "build/icon.ico",
       "uninstallDisplayName": "Tutaj (Lorem Ipsum)",
       "language": "1045"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kauczu",
+        "repo": "tutaj",
+        "releaseType": "release"
+      }
+    ]
   },
   "homepage": "https://github.com/kauczu/tutaj",
   "repository": {

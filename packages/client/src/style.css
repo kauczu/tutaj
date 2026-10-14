@@ -297,6 +297,24 @@ dialog {
 dialog::backdrop { background: rgba(2, 6, 12, 0.6); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 .settings-form { display: grid; gap: 14px; }
 .settings-form h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dialog-head .ghost { font-size: 13px; padding: 6px 14px; }
+.lobby-footer .link { background: none; border: 0; padding: 0; font: inherit; color: var(--glow); cursor: pointer; }
+.lobby-footer .link:hover { text-decoration: underline; }
+/* ---- Help ---- */
+dialog.help-dialog { width: min(680px, calc(100% - 32px)); }
+.help { display: grid; gap: 14px; }
+.help h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.help-body { max-height: min(68vh, 720px); overflow-y: auto; padding-right: 6px; display: grid; gap: 18px; font-size: 14px; line-height: 1.55; }
+.help-body h3 { margin: 0 0 6px; font-size: 15px; color: var(--accent-bright); }
+.help-body p { margin: 6px 0; }
+.help-body ul { margin: 6px 0; padding-left: 20px; display: grid; gap: 4px; }
+.help-body strong { color: var(--text); font-weight: 600; }
+.help-body li, .help-body p { color: var(--muted); }
+table.keys { border-collapse: collapse; margin: 4px 0; }
+table.keys td { padding: 3px 12px 3px 0; color: var(--muted); }
+kbd { display: inline-block; min-width: 22px; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--border-strong);
+  background: rgba(16, 31, 72, 0.6); color: var(--text); font: 12px ui-monospace, 'Cascadia Mono', Consolas, monospace; text-align: center; }
 fieldset.quality { display: grid; gap: 12px; margin: 0 0 8px; padding: 0; border: 0; min-width: 0; }
 fieldset.quality label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 fieldset.quality p { margin: 0; }

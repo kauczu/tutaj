@@ -190,5 +190,11 @@ test('desktop lobby: server block collapsed, server and app versions in the foot
   await expect(ania.page.getByRole('button', { name: 'Przełącz na tryb lokalny (sieć LAN)' })).toBeHidden();
   await ania.page.click('#host-summary');
   await expect(ania.page.getByRole('button', { name: 'Przełącz na tryb lokalny (sieć LAN)' })).toBeVisible();
+  // Help in the app: the overlay section with the current shortcuts, and the Alt menu hint.
+  await ania.page.keyboard.press('F1');
+  await expect(ania.page.locator('#help h3')).toContainText(['Gra: nakładka i skróty']);
+  await expect(ania.page.locator('#help')).toContainText('Ctrl+Shift+H');
+  await expect(ania.page.locator('#help')).toContainText('pokazuje menu');
+  await ania.page.keyboard.press('Escape');
   await expect(ania.page.locator('#lobby-footer')).toContainText(/serwer v\d+\.\d+\.\d+ · aplikacja v9\.9\.9/);
 });

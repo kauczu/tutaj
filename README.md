@@ -35,7 +35,8 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - **hybryda P2P/SFU** – automatyczne przełączanie (lub ręczne: Ustawienia → Tryb mediów), simulcast, wskaźnik P2P/SFU na pasku
 - **nakładka na grę** (aplikacja desktopowa) – małe kamery współgraczy nad grą, skróty działające w grze
 - **profil jakości „Gra”** – dźwięk studyjny, kamera 1080p, sprzętowe kodowanie i limit wysyłania (zob. niżej)
-- PWA (instalowalna, działa offline jako „powłoka”), aplikacja desktopowa (Electron)
+- **Pomoc** – skrócona instrukcja obsługi: Ustawienia → Pomoc, stopka lobby albo klawisz F1
+- PWA (instalowalna, działa offline jako „powłoka”), aplikacja desktopowa (Electron) z automatycznymi aktualizacjami
 
 ## Szybki start (dev)
 
@@ -123,6 +124,21 @@ instalator tylko jako artefakt.
 
 Instalator nie jest podpisany – Windows SmartScreen przy pierwszym uruchomieniu pokaże ostrzeżenie
 („Więcej informacji” → „Uruchom mimo to”). Usunie je dopiero certyfikat do podpisywania kodu.
+
+### Aktualizacje aplikacji desktopowej
+
+Od wersji 0.3.1 aplikacja kilka sekund po starcie sprawdza najnowsze wydanie na GitHubie (`electron-updater`,
+pliki `latest.yml` i `.blockmap` publikowane obok instalatora). Gdy jest nowsza wersja, pyta: **Aktualizuj** /
+**Później** / **Pomiń tę wersję**. Po zgodzie pobiera ją w tle (postęp na ikonie na pasku zadań), sprawdza sumę
+SHA-512, instaluje po cichu i uruchamia się ponownie – a jeśli trwa rozmowa, najpierw pyta, czy ją przerwać
+(albo instaluje przy zamknięciu aplikacji). Ręcznie: menu (Alt) → „Sprawdź aktualizacje…”.
+
+Własna kompilacja z innego repozytorium: zmień `build.publish` (owner/repo) w `packages/desktop/package.json`.
+Test bez publikowania: `TUTAJ_UPDATE_FEED=http://…/` (katalog z `latest.yml` i instalatorem) – aplikacja pokaże
+ofertę i pobierze plik, ale go nie zainstaluje.
+
+Aplikacja pamięta też rozmiar, położenie i maksymalizację okna (`settings.json`; jeśli monitor zniknął, okno wraca
+na główny), a lobby – ostatnie imię i pokój.
 
 ## Własny serwer (internet)
 

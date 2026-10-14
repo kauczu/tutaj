@@ -2,6 +2,7 @@ import { app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, Menu, net
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { initUpdater } from './updater.mjs';
 
 /*
  * Tutaj desktop.
@@ -106,6 +107,10 @@ function loadSettings() {
     mode: mode === 'lan' ? 'lan' : 'remote',
     serverUrl: isAllowedServer(serverUrl) ? serverUrl : DEFAULT_SERVER,
     overlay: sanitizeOverlay(saved.overlay),
+    /** Last size and position of the call window (restored at start). */
+    window: sanitizeWindow(saved.window),
+    /** Version the user chose not to install ("Pomiń tę wersję"). */
+    skipVersion: typeof saved.skipVersion === 'string' ? saved.skipVersion : null,
     hotkeys: sanitizeHotkeys(saved.hotkeys),
   };
 }
@@ -121,9 +126,10 @@ function saveSettings(patch) {
   writeFileSync(settingsFile(), JSON.stringify({ ...current, ...patch }, null, 2));
 }
 
-const settings = loadSettings();
 let server = null;
 let mainWindow = null;
+/** Desktop app updates (see updater.mjs). */
+let updates = null;
 let appUrl = '';
 let appOrigin = '';
 
@@ -283,6 +289,9 @@ function buildMenu() {
             ? { label: `Tryb serwera (${hostOf(settings.serverUrl)})`, click: () => switchMode('remote') }
             : { label: 'Tryb lokalny (sieć LAN)', click: () => switchMode('lan') },
           { type: 'separator' },
+          { label: 'Sprawdź aktualizacje…', click: () => updates?.check(true) },
+          { label: `Wersja ${app.getVersion()}`, enabled: false },
+          { type: 'separator' },
           { role: 'quit', label: 'Zamknij' },
         ],
       },
@@ -333,6 +342,63 @@ function registerIpc() {
     placeOverlay();
   }));
   ipcMain.handle('tutaj:call-state', guard((on) => setInCall(on === true)));
+}
+
+// --- Window size and position ---------------------------------------------------------
+
+const MIN_SIZE = { width: 420, height: 520 };
+
+function sanitizeWindow(w) {
+  if (!w || typeof w !== 'object') return null;
+  const int = (v) => (Number.isFinite(v) ? Math.round(v) : null);
+  const width = int(w.width);
+  const height = int(w.height);
+  if (width === null || height === null) return null;
+  return {
+    x: int(w.x),
+    y: int(w.y),
+    width: Math.max(MIN_SIZE.width, width),
+    height: Math.max(MIN_SIZE.height, height),
+    maximized: w.maximized === true,
+  };
+}
+
+/**
+ * The saved window bounds, if they still land on a connected monitor (monitors change between
+ * sessions); otherwise just the saved size, fitted to the primary monitor and centred.
+ */
+function initialBounds() {
+  const w = settings.window;
+  if (!w) return { width: 1280, height: 820 };
+  const onScreen =
+    w.x !== null &&
+    w.y !== null &&
+    screen.getAllDisplays().some(({ workArea: a }) => {
+      // Enough of the title bar visible to grab the window.
+      return w.x + w.width - 100 > a.x && w.x + 100 < a.x + a.width && w.y >= a.y - 8 && w.y + 40 < a.y + a.height;
+    });
+  if (onScreen) return { x: w.x, y: w.y, width: w.width, height: w.height };
+  const area = screen.getPrimaryDisplay().workArea;
+  return { width: Math.min(w.width, area.width), height: Math.min(w.height, area.height) };
+}
+
+/** Remembers size, position and maximized state (normal bounds, also while maximized or minimized). */
+function trackWindowBounds(win) {
+  let timer = null;
+  const save = () => {
+    if (win.isDestroyed() || win.isFullScreen()) return;
+    settings.window = { ...win.getNormalBounds(), maximized: win.isMaximized() };
+    saveSettings({ window: settings.window });
+  };
+  const later = () => {
+    clearTimeout(timer);
+    timer = setTimeout(save, 600);
+  };
+  for (const event of ['resize', 'move', 'maximize', 'unmaximize']) win.on(event, later);
+  win.on('close', () => {
+    clearTimeout(timer);
+    save();
+  });
 }
 
 // --- Game overlay ----------------------------------------------------------------
@@ -533,10 +599,10 @@ async function createWindow() {
   });
 
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 420,
-    minHeight: 520,
+    ...initialBounds(),
+    minWidth: MIN_SIZE.width,
+    minHeight: MIN_SIZE.height,
+    show: false,
     title: 'Tutaj',
     backgroundColor: '#02060c',
     autoHideMenuBar: true,
@@ -551,6 +617,10 @@ async function createWindow() {
       backgroundThrottling: false,
     },
   });
+
+  if (settings.window?.maximized) mainWindow.maximize();
+  mainWindow.show();
+  trackWindowBounds(mainWindow);
 
   // Links (chat, invites, other sites) open in the system browser, never inside the app.
   mainWindow.webContents.setWindowOpenHandler(({ url, frameName }) => {
@@ -602,6 +672,10 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 
+// Read last, after every declaration above: loading calls sanitizers that use module constants
+// (a `const` read before its line throws — and the app would not start once settings were saved).
+const settings = loadSettings();
+
 app.whenReady().then(async () => {
   if (settings.mode === 'lan') {
     await startEmbeddedServer();
@@ -610,8 +684,19 @@ app.whenReady().then(async () => {
     appUrl = settings.serverUrl;
   }
   registerIpc();
+  updates = initUpdater({
+    window: () => mainWindow,
+    inCall: () => inCall,
+    skipped: () => settings.skipVersion,
+    skip: (version) => {
+      settings.skipVersion = version;
+      saveSettings({ skipVersion: version ?? undefined });
+    },
+  });
   buildMenu();
   await createWindow();
+  // Not during the start-up rush; the dialog appears over the lobby.
+  setTimeout(() => updates.check(), 5000);
 });
 
 app.on('will-quit', () => globalShortcut.unregisterAll());

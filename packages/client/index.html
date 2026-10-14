@@ -118,7 +118,10 @@
 
       <dialog id="settings">
         <form method="dialog" class="settings-form">
-          <h2>Ustawienia</h2>
+          <div class="dialog-head">
+            <h2>Ustawienia</h2>
+            <button id="open-help" class="ghost" type="button" title="Skrócona instrukcja obsługi (F1)">Pomoc</button>
+          </div>
           <label>Mikrofon <select id="set-audio-input"></select></label>
           <label>Kamera <select id="set-video-input"></select></label>
           <label id="set-audio-output-wrap">Głośnik <select id="set-audio-output"></select></label>
@@ -139,6 +142,14 @@
         </form>
       </dialog>
     </main>
+
+    <dialog id="help" class="help-dialog" aria-labelledby="help-title">
+      <form method="dialog" class="help">
+        <h2 id="help-title">Pomoc — jak używać Tutaj</h2>
+        <div id="help-body" class="help-body"></div>
+        <button class="primary" value="close">Zamknij</button>
+      </form>
+    </dialog>
 
     <div id="toasts" class="toasts" aria-live="polite"></div>
     <script type="module" src="/src/main.ts"></script>

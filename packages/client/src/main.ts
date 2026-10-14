@@ -6,6 +6,7 @@ import { Room } from './room';
 import { signalingUrl } from './signaling';
 import { $, fillDeviceSelect } from './ui/dom';
 import type { OverlaySettings } from './ui/overlay';
+import { showHelp } from './ui/help';
 import { renderQualityForm } from './ui/quality-form';
 import { setIcon } from './ui/icons';
 
@@ -122,7 +123,8 @@ async function refreshDevices(): Promise<void> {
 async function initLobby(): Promise<void> {
   const params = new URLSearchParams(location.search);
   nameInput.value = store.get('name');
-  roomInput.value = params.get('room') ?? randomRoom();
+  // An invitation link wins; otherwise the room used last time.
+  roomInput.value = params.get('room') ?? (store.get('room') || randomRoom());
   serverInput.value = params.get('server') ?? store.get('server');
   ownerKeyInput.value = store.get('ownerKey');
   renderBranding();
@@ -188,6 +190,15 @@ function link(text: string, href: string): HTMLAnchorElement {
   return a;
 }
 
+function helpLink(): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'link';
+  b.textContent = 'Pomoc';
+  b.onclick = () => void showHelp();
+  return b;
+}
+
 /**
  * Author, repository and licence: lobby footer and the "about" section in settings.
  * The page comes from the server, so APP_VERSION is the server's version; the desktop app has its own.
@@ -201,6 +212,8 @@ function renderBranding(desktopVersion?: string): void {
     link(BRAND.author, BRAND.authorUrl),
     ' · ',
     link('GitHub', BRAND.repoUrl),
+    ' · ',
+    helpLink(),
     ` · ${BRAND.license} · ${versions}`,
   );
   const logo = document.createElement('img');
@@ -338,6 +351,7 @@ async function join(): Promise<void> {
     return showError('Nieprawidłowy adres serwera.');
   }
   store.set('name', name);
+  store.set('room', roomId);
   store.set('server', serverInput.value.trim());
   store.set('ownerKey', ownerKeyInput.value.trim());
 
@@ -376,6 +390,14 @@ async function join(): Promise<void> {
     }
   }
 }
+
+// Help: F1 anywhere, "Pomoc" in the settings dialog and the lobby footer.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'F1') return;
+  e.preventDefault();
+  void showHelp();
+});
+$('open-help').addEventListener('click', () => void showHelp());
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
