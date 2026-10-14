@@ -218,6 +218,24 @@ details[hidden] { display: none; }
 .tile.muted .mic-off { display: inline-flex; }
 .tile .hand { display: none; position: absolute; top: 10px; left: 10px; font-size: 28px; animation: wave 1s ease-in-out infinite alternate; }
 .tile.hand-up .hand { display: block; }
+/* ---- Moderation ---- */
+.tile .crown { display: none; font-size: 13px; }
+.tile.host .crown { display: inline; }
+.tile-menu-btn { position: absolute; top: 8px; right: 8px; z-index: 4; width: 32px; height: 32px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--glass-strong); color: var(--text); font-size: 18px;
+  line-height: 1; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+.tile:hover .tile-menu-btn, .tile-menu-btn:focus-visible { opacity: 1; }
+@media (hover: none) { .tile-menu-btn { opacity: 1; } }
+.tile-menu { position: fixed; z-index: 21; min-width: 220px; display: grid; padding: 6px; border-radius: 14px;
+  background: var(--glass-strong); border: 1px solid var(--border-strong); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.tile-menu[hidden] { display: none; }
+.tile-menu-title { padding: 6px 10px; font-size: 12px; color: var(--muted); }
+.tile-menu button { text-align: left; padding: 9px 10px; border: 0; border-radius: 9px; background: none; color: var(--text);
+  font: inherit; font-size: 14px; cursor: pointer; }
+.tile-menu button:hover { background: var(--glass-hover); }
+.tile-menu button.danger { color: #ff9a9d; }
+.mode-badge.locked { background: rgba(242, 194, 122, 0.14); color: var(--warn); }
 /* ---- Reactions ---- */
 .reaction { position: absolute; bottom: 8%; z-index: 3; pointer-events: none; font-size: clamp(30px, 5vw, 64px);
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6)); animation: reaction-float 2600ms ease-out forwards; }

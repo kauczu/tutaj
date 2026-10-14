@@ -80,6 +80,7 @@
       </div>
 
       <div id="reaction-picker" class="reaction-picker" role="menu" hidden></div>
+      <div id="tile-menu" class="tile-menu" role="menu" hidden></div>
 
       <aside id="chat" class="chat" hidden>
         <header>
@@ -101,6 +102,7 @@
           <span id="mode-badge" class="mode-badge mesh">P2P</span>
           <span id="e2ee-badge" class="mode-badge e2ee" hidden>E2EE</span>
           <span id="encoder-badge" class="mode-badge" hidden></span>
+          <span id="locked-badge" class="mode-badge locked" title="Pokój zablokowany przez gospodarza — nowe osoby nie dołączą" hidden>🔒</span>
           <span id="timer">00:00</span>
         </div>
         <div class="buttons">
@@ -137,6 +139,7 @@
             </select>
           </label>
           <p id="mode-info" class="muted small"></p>
+          <fieldset id="host-settings" class="quality"></fieldset>
           <fieldset id="overlay-settings" class="quality" hidden></fieldset>
           <fieldset id="quality-room" class="quality"></fieldset>
           <p id="send-stats" class="send-stats small" hidden></p>

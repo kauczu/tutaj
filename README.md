@@ -31,6 +31,8 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - podnoszenie ręki, wyciszanie, wyłączanie kamery (zwalnia urządzenie), wybór mikrofonu/kamery/głośnika
 - **nagrywanie lokalne** całej rozmowy (kompozycja kafelków + miks audio → plik `.webm`)
 - statystyki połączenia (RTT, straty, P2P/TURN) i wskaźnik jakości na kafelkach
+- **gospodarz pokoju** (👑, założyciel pokoju): wycisz kogoś / wszystkich, usuń z pokoju (powrót zablokowany na 10 min –
+  po id sesji i adresie IP), przekaż rolę, zablokuj pokój dla nowych osób; egzekwowane przez serwer
 - hasło pokoju, link z zaproszeniem, skróty klawiszowe (M, V, S, H, C, R)
 - **rozmowa przetrwa awarię serwera** – trwające połączenia P2P działają dalej, klient sam wraca i wznawia sesję
 - **hybryda P2P/SFU** – automatyczne przełączanie (lub ręczne: Ustawienia → Tryb mediów), simulcast, wskaźnik P2P/SFU na pasku

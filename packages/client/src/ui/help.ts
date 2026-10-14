@@ -48,6 +48,15 @@ async function content(): Promise<HTMLElement[]> {
       ),
     ),
     section(
+      'Gospodarz pokoju 👑',
+      list(
+        ['Gospodarzem jest osoba, która założyła pokój; gdy wyjdzie, rola przechodzi na kolejną osobę (albo gospodarz ją przekazuje).'],
+        ['Gospodarz ma na kafelkach innych menu ', b('⋮'), ': wycisz mikrofon, przekaż rolę gospodarza, usuń z pokoju.'],
+        ['Usunięta osoba nie wróci do pokoju przez 10 minut (dotyczy też innych osób z tego samego adresu internetowego).'],
+        ['Ustawienia → ', b('Zablokuj pokój'), ' — nikt nowy nie dołączy; ', b('Wycisz wszystkich'), '. Wyciszony uczestnik może sam włączyć mikrofon z powrotem.'],
+      ),
+    ),
+    section(
       'Jakość obrazu i dźwięku',
       list(
         ['Ustawienia → ', b('Profil jakości'), ': „Rozmowa” (domyślny) albo „Gra” — dźwięk studyjny, kamera 1080p, limit wysyłania 4 Mb/s.'],

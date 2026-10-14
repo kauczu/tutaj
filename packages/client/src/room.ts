@@ -1,4 +1,4 @@
-import type { IceServer, MediaMode, ModePreference, ModeReason, QualityReport, ServerMessage } from '@tutaj/shared';
+import type { IceServer, MediaMode, ModePreference, ModeReason, ModerationAction, QualityReport, RoomState, ServerMessage } from '@tutaj/shared';
 import { SpeakingDetector, playCue } from './audio';
 import { E2ee, safetyCode } from './e2ee';
 import { FileReceiver, MAX_FILE_SIZE, formatBytes, sendFile } from './files';
@@ -84,7 +84,7 @@ async function connectAndJoin(
       } else if (msg.type === 'error') {
         clearTimeout(timer);
         off();
-        reject(new JoinError(msg.message, ['bad-password', 'room-full', 'room-limit'].includes(msg.code)));
+        reject(new JoinError(msg.message, ['bad-password', 'room-full', 'room-limit', 'room-locked', 'kicked'].includes(msg.code)));
       }
     });
     signaling.send({
@@ -129,6 +129,9 @@ export class Room {
   /** Prefer H.264 on new connections (hardware encoder available or chosen by the user). */
   private h264 = false;
   private hand = false;
+  /** Room moderation: who hosts, whether new people may join. */
+  private hostId: string | null = null;
+  private locked = false;
   private lastReactionSent = 0;
   private readonly lastReactionFrom = new Map<string, number>();
   private leaving = false;
@@ -228,6 +231,7 @@ export class Room {
       if (!this.peers.get(p.id)?.healthy) this.addPeer(p.id, p.name, true);
     }
     this.relayState();
+    this.setRoomState(welcome.roomState, false);
     void this.applyMode(welcome.mode);
     if (firstJoin && welcome.privileged) toast('Rozpoznano klucz właściciela — limity serwera Cię nie dotyczą.');
     if (welcome.peers.length === 0 && firstJoin) {
@@ -254,10 +258,17 @@ export class Room {
         const peer = this.peers.get(msg.id);
         // Only its server connection dropped: keep talking P2P; it will resume or time out.
         if (!peer || (msg.reason === 'disconnect' && peer.healthy)) break;
+        // Kicked: drop the P2P link too (they could otherwise keep it up), with a new key for the rest.
         this.peerGone(msg.id);
-        this.chat.addSystem(`${peer.state.name} opuszcza pokój`);
+        this.chat.addSystem(msg.reason === 'kicked' ? `${peer.state.name} — usunięto z pokoju` : `${peer.state.name} opuszcza pokój`);
         break;
       }
+      case 'room-state':
+        this.setRoomState(msg, true);
+        break;
+      case 'moderated':
+        this.onModerated(msg.action, msg.by);
+        break;
       case 'signal': {
         let peer = this.peers.get(msg.from);
         const isOffer = 'description' in msg.data && msg.data.description.type === 'offer';
@@ -291,6 +302,130 @@ export class Room {
         if (msg.code !== 'unknown-peer') toast(msg.message, 'error');
         break;
     }
+  }
+
+  // --- Moderation -------------------------------------------------------------
+
+  get isHost(): boolean {
+    return this.hostId !== null && this.hostId === this.selfId;
+  }
+
+  private setRoomState(state: RoomState, announce: boolean): void {
+    const hostChanged = state.host !== this.hostId;
+    const lockChanged = state.locked !== this.locked;
+    this.hostId = state.host;
+    this.locked = state.locked;
+    if (announce && hostChanged) {
+      const name = this.isHost ? 'Ty' : this.peers.get(state.host ?? '')?.state.name;
+      if (name) this.chat.addSystem(this.isHost ? 'Jesteś teraz gospodarzem pokoju' : `${name} jest teraz gospodarzem pokoju`);
+      if (this.isHost) toast('Jesteś teraz gospodarzem pokoju — możesz wyciszać, usuwać i zablokować pokój');
+    }
+    if (announce && lockChanged) this.chat.addSystem(state.locked ? 'Pokój zablokowany — nowe osoby nie dołączą' : 'Pokój odblokowany');
+    for (const tile of this.grid.all()) tile.setHost(tile.local ? this.isHost : tile.id === this.hostId);
+    $('locked-badge').hidden = !state.locked;
+    this.updateTileMenus();
+    if ($<HTMLDialogElement>('settings').open) this.renderHostSettings();
+  }
+
+  /** Something the host did to us. */
+  private onModerated(action: 'mute' | 'kick', by: string): void {
+    if (action === 'mute') {
+      if (this.media.audioEnabled) {
+        this.media.setAudioEnabled(false);
+        this.broadcastState();
+      }
+      toast(`${by} (gospodarz) wyciszył(a) Twój mikrofon — możesz go włączyć ponownie`);
+      return;
+    }
+    try {
+      sessionStorage.setItem('tutaj:notice', `${by} (gospodarz) usunął(-ęła) Cię z pokoju „${this.opts.roomId}”.`);
+    } catch {
+      /* no storage */
+    }
+    void this.leave();
+  }
+
+  private moderate(action: ModerationAction, target?: string): void {
+    this.signaling.send({ type: 'moderate', action, target });
+  }
+
+  /** Host: a ⋮ menu on every other participant's tile. */
+  private updateTileMenus(): void {
+    for (const tile of this.grid.all()) {
+      let btn = tile.el.querySelector<HTMLButtonElement>('.tile-menu-btn');
+      const want = this.isHost && !tile.local;
+      if (!want) {
+        btn?.remove();
+        continue;
+      }
+      if (btn) continue;
+      btn = h('button', { class: 'tile-menu-btn', title: 'Moderacja', text: '⋮' });
+      btn.type = 'button';
+      btn.onclick = (e) => {
+        e.stopPropagation(); // not the tile's click (pin)
+        this.openTileMenu(tile.id, btn!);
+      };
+      tile.el.append(btn);
+    }
+  }
+
+  private openTileMenu(peerId: string, anchor: HTMLElement): void {
+    const menu = $('tile-menu');
+    const name = this.peers.get(peerId)?.state.name ?? '';
+    const item = (text: string, fn: () => void, danger = false) => {
+      const b = h('button', { text, class: danger ? 'danger' : '' });
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.onclick = () => {
+        menu.hidden = true;
+        fn();
+      };
+      return b;
+    };
+    menu.replaceChildren(
+      h('div', { class: 'tile-menu-title', text: name }),
+      item('Wycisz mikrofon', () => this.moderate('mute', peerId)),
+      item('Przekaż rolę gospodarza', () => this.moderate('make-host', peerId)),
+      item(
+        'Usuń z pokoju…',
+        () => {
+          if (confirm(`Usunąć ${name} z pokoju? Nie będzie mógł (mogła) wrócić przez 10 minut.`)) this.moderate('kick', peerId);
+        },
+        true,
+      ),
+    );
+    menu.hidden = false;
+    const r = anchor.getBoundingClientRect();
+    menu.style.top = `${Math.min(window.innerHeight - menu.offsetHeight - 8, r.bottom + 4)}px`;
+    menu.style.left = `${Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth))}px`;
+  }
+
+  /** Settings dialog: lock / mute all for the host, who hosts for everyone else. */
+  private renderHostSettings(): void {
+    const box = $('host-settings');
+    const hostName = this.isHost ? 'Ty' : this.peers.get(this.hostId ?? '')?.state.name ?? '–';
+    if (!this.isHost) {
+      box.replaceChildren(h('p', { class: 'muted small', text: `Gospodarz pokoju: ${hostName}${this.locked ? ' · pokój zablokowany' : ''}` }));
+      return;
+    }
+    const lock = h('input');
+    lock.type = 'checkbox';
+    lock.id = 'host-lock';
+    lock.checked = this.locked;
+    lock.onchange = () => this.moderate(lock.checked ? 'lock' : 'unlock');
+    const muteAll = h('button', { class: 'ghost', text: 'Wycisz wszystkich' });
+    muteAll.type = 'button';
+    muteAll.id = 'host-mute-all';
+    muteAll.onclick = () => {
+      this.moderate('mute-all');
+      toast('Wyciszono wszystkich uczestników');
+    };
+    box.replaceChildren(
+      h('legend', { text: 'Gospodarz pokoju (Ty)' }),
+      h('label', { class: 'check' }, lock, 'Zablokuj pokój — nikt nowy nie dołączy'),
+      muteAll,
+      h('p', { class: 'muted small', text: 'Na kafelku uczestnika (⋮): wycisz, przekaż rolę gospodarza, usuń z pokoju.' }),
+    );
   }
 
   private async reconnect(): Promise<void> {
@@ -389,6 +524,8 @@ export class Room {
     this.peers.set(id, peer);
     this.receivers.set(id, receiver);
     this.grid.add(tile);
+    tile.setHost(id === this.hostId);
+    this.updateTileMenus();
     this.applyBitrate();
     return peer;
   }
@@ -981,7 +1118,10 @@ export class Room {
       }),
     );
     const outside = (e: PointerEvent) => {
-      if (!picker.hidden && !picker.contains(e.target as Node) && !$('btn-react').contains(e.target as Node)) this.toggleReactionPicker(false);
+      const target = e.target as Node;
+      if (!picker.hidden && !picker.contains(target) && !$('btn-react').contains(target)) this.toggleReactionPicker(false);
+      const menu = $('tile-menu');
+      if (!menu.hidden && !menu.contains(target) && !(target as HTMLElement).closest?.('.tile-menu-btn')) menu.hidden = true;
     };
     document.addEventListener('pointerdown', outside);
     this.cleanups.push(() => document.removeEventListener('pointerdown', outside));
@@ -1078,6 +1218,7 @@ export class Room {
       ? `Teraz: ${this.mode === 'sfu' ? 'SFU' : 'P2P'}. Tryb automatyczny przełącza na SFU przy 3+ osobach, gdy łącze lub procesor nie nadąża.`
       : 'Serwer nie ma włączonego SFU — media zawsze płyną P2P.';
     modeSelect.onchange = () => this.signaling.send({ type: 'set-mode', pref: modeSelect.value as ModePreference });
+    this.renderHostSettings();
     renderQualityForm($('quality-room'), this.media, (msg) => toast(msg, 'error'));
     void this.renderOverlaySettings();
     this.renderStats();

@@ -42,7 +42,7 @@ export class Tile {
       this.avatar,
       this.statusEl,
       this.handEl,
-      h('div', { class: 'label' }, this.qualityEl, this.micEl, this.nameEl),
+      h('div', { class: 'label' }, this.qualityEl, this.micEl, this.nameEl, h('span', { class: 'crown', text: '👑', title: 'Gospodarz pokoju' })),
     );
     this.setState(state);
   }
@@ -90,6 +90,11 @@ export class Tile {
   react(emoji: string): void {
     floatReaction(this.el, emoji);
     this.onReaction(emoji);
+  }
+
+  /** 👑 next to the name of the room's host. */
+  setHost(on: boolean): void {
+    this.el.classList.toggle('host', on);
   }
 
   setSpeaking(on: boolean): void {

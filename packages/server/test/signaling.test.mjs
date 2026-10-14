@@ -158,3 +158,59 @@ test('/api/info identifies a Tutaj server (checked by the desktop app before swi
   assert.match(info.version, /^\d+\.\d+\.\d+$/);
   assert.equal(info.protocol, 1);
 });
+
+test('moderation: the first participant hosts; mute, lock, kick with a ban; non-hosts are refused', async () => {
+  const a = await joined('mod1', 'Ania');
+  assert.deepEqual(a.msg.roomState, { host: a.msg.selfId, locked: false });
+  const b = await joined('mod1', 'Bartek');
+  assert.deepEqual(b.msg.roomState, { host: a.msg.selfId, locked: false });
+  await a.c.next(); // peer-joined
+
+  b.c.send({ type: 'moderate', action: 'kick', target: a.msg.selfId });
+  assert.equal((await b.c.next()).code, 'not-host');
+
+  a.c.send({ type: 'moderate', action: 'mute', target: b.msg.selfId });
+  assert.deepEqual(await b.c.next(), { type: 'moderated', action: 'mute', by: 'Ania' });
+
+  a.c.send({ type: 'moderate', action: 'lock' });
+  assert.deepEqual(await a.c.next(), { type: 'room-state', host: a.msg.selfId, locked: true });
+  assert.deepEqual(await b.c.next(), { type: 'room-state', host: a.msg.selfId, locked: true });
+  const late = await joined('mod1', 'Celina');
+  assert.equal(late.msg.code, 'room-locked');
+  late.c.close();
+  a.c.send({ type: 'moderate', action: 'unlock' });
+  await a.c.next();
+  await b.c.next();
+
+  a.c.send({ type: 'moderate', action: 'kick', target: b.msg.selfId });
+  assert.deepEqual(await b.c.next(), { type: 'moderated', action: 'kick', by: 'Ania' });
+  assert.deepEqual(await a.c.next(), { type: 'peer-left', id: b.msg.selfId, reason: 'kicked' });
+  await new Promise((r) => b.c.ws.once('close', r));
+  // Kept out: neither the old session nor a new connection from the same address gets in.
+  const back = await joined('mod1', 'Bartek');
+  assert.equal(back.msg.code, 'kicked');
+  assert.match(back.msg.message, /za 10 min/);
+  back.c.close();
+  a.c.close();
+});
+
+test('moderation: when the host leaves, the longest-present participant takes over; make-host hands it over', async () => {
+  const a = await joined('mod2', 'Ania');
+  const b = await joined('mod2', 'Bartek');
+  const c = await joined('mod2', 'Celina');
+  await a.c.next();
+  await a.c.next();
+  await b.c.next();
+
+  a.c.send({ type: 'moderate', action: 'make-host', target: c.msg.selfId });
+  for (const p of [a, b, c]) assert.deepEqual(await p.c.next(), { type: 'room-state', host: c.msg.selfId, locked: false });
+
+  c.c.send({ type: 'leave' });
+  for (const p of [a, b]) {
+    assert.deepEqual(await p.c.next(), { type: 'peer-left', id: c.msg.selfId, reason: 'leave' });
+    assert.deepEqual(await p.c.next(), { type: 'room-state', host: a.msg.selfId, locked: false });
+  }
+  a.c.close();
+  b.c.close();
+  c.c.close();
+});

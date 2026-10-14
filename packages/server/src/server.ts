@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import type { TLSSocket } from 'node:tls';
 import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
-import type { ErrorCode, ModeReason, ServerMessage } from '@tutaj/shared';
+import type { ErrorCode, ModeReason, ModerationAction, ServerMessage } from '@tutaj/shared';
 import { selfSignedCert, type TlsMaterial } from './cert.js';
 import { Guard, type GuardOptions } from './guard.js';
 import { DEFAULT_ICE, iceServersFor, type IceConfig } from './ice.js';
@@ -113,6 +113,11 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     if (!p) policies.set(roomId, (p = new ModePolicy(!!sfu)));
     return p;
   };
+  const broadcastRoomState = (roomId: string) => {
+    const state = rooms.state(roomId);
+    for (const c of rooms.members(roomId)) send(c.ws, { type: 'room-state', ...state });
+  };
+
   /** The SFU only carries end-to-end encrypted media: everyone in the room must support it. */
   const allE2ee = (roomId: string) => rooms.members(roomId).every((c) => c.e2ee);
   const announceMode = (roomId: string, reason: ModeReason, by?: string) => {
@@ -176,22 +181,33 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   // --- WebSocket signaling -------------------------------------------------
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
   const alive = new WeakSet<WebSocket>();
+  /** For moderation across connections: a client's IP (bans) and how to throw it out (kick). */
+  const clientIps = new WeakMap<Client, string>();
+  const kickers = new WeakMap<Client, () => void>();
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const client: Client = { id: randomUUID(), name: '', ws, roomId: null };
     const ip = guard.clientIp(req);
+    clientIps.set(client, ip);
+    kickers.set(client, () => {
+      leave('kicked');
+      // The 'moderated' message goes out first; then the connection closes.
+      setTimeout(() => ws.close(4001, 'kicked'), 200);
+    });
     let privileged = false;
     let windowStart = Date.now();
     let count = 0;
     alive.add(ws);
     ws.on('pong', () => alive.add(ws));
 
-    const leave = (reason: 'leave' | 'disconnect') => {
+    const leave = (reason: 'leave' | 'disconnect' | 'kicked') => {
       const roomId = client.roomId;
+      const wasHost = rooms.isHost(client);
       const remaining = rooms.leave(client);
       if (!roomId || !remaining) return;
       sfu?.closePeer(roomId, client.id);
       for (const other of remaining) send(other.ws, { type: 'peer-left', id: client.id, reason });
+      if (wasHost && remaining.length) broadcastRoomState(roomId);
       if (remaining.length === 0) {
         guard.roomClosed(roomId);
         policies.delete(roomId);
@@ -200,6 +216,33 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       }
       const d = policyFor(roomId).participantsChanged(remaining.length, client.id, allE2ee(roomId));
       if (d) announceMode(roomId, d.reason);
+    };
+
+    /** Host actions. The server enforces kicks and the lock; mutes are requests the client carries out. */
+    const moderate = (action: ModerationAction, targetId?: string) => {
+      const roomId = client.roomId;
+      if (!roomId) return;
+      if (!rooms.isHost(client)) return sendError(ws, 'not-host', 'Tylko gospodarz pokoju może to zrobić');
+      const target = targetId ? rooms.peer(roomId, targetId) : undefined;
+      switch (action) {
+        case 'lock':
+        case 'unlock':
+          rooms.setLocked(roomId, action === 'lock');
+          return broadcastRoomState(roomId);
+        case 'mute-all':
+          for (const other of rooms.others(client)) send(other.ws, { type: 'moderated', action: 'mute', by: client.name });
+          return;
+      }
+      if (!target || target === client) return sendError(ws, 'unknown-peer', 'Uczestnik nie istnieje');
+      if (action === 'mute') return send(target.ws, { type: 'moderated', action: 'mute', by: client.name });
+      if (action === 'make-host') {
+        rooms.setHost(roomId, target.id);
+        return broadcastRoomState(roomId);
+      }
+      // kick: out of the room now, and kept out for a while (also from resuming the session).
+      rooms.ban(roomId, target, clientIps.get(target) ?? '');
+      send(target.ws, { type: 'moderated', action: 'kick', by: client.name });
+      kickers.get(target)?.();
     };
 
     ws.on('message', (data, isBinary) => {
@@ -224,10 +267,13 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
           return sendError(ws, 'rate-limited', 'Za dużo prób dołączenia — spróbuj ponownie za minutę');
         }
         client.name = msg.name;
-        if (msg.resume && validResume(msg.room, msg.resume)) {
+        const resuming = !!msg.resume && validResume(msg.room, msg.resume);
+        let resumedHost = false;
+        if (msg.resume && resuming) {
           // Take over the previous identity; a stale socket still holding it is dropped silently.
           const stale = rooms.peer(msg.room, msg.resume.id);
           if (stale) {
+            resumedHost = rooms.isHost(stale);
             if (rooms.leave(stale)?.length === 0) guard.roomClosed(msg.room);
             sfu?.closePeer(msg.room, stale.id);
             stale.ws.terminate();
@@ -239,14 +285,18 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         if (creating && !guard.canCreateRoom(ip, privileged)) {
           return sendError(ws, 'room-limit', 'Masz już otwartą maksymalną liczbę pokoi — zamknij któryś albo dołącz do istniejącego');
         }
-        const result = rooms.join(client, msg.room, msg.password);
+        const result = rooms.join(client, msg.room, msg.password, ip, resuming);
         if (!result.ok) {
-          return sendError(
-            ws,
-            result.code,
-            result.code === 'room-full' ? `Pokój jest pełny (max ${maxPeers} osoby)` : 'Nieprawidłowe hasło pokoju',
-          );
+          const messages = {
+            'room-full': `Pokój jest pełny (max ${maxPeers} osoby)`,
+            'bad-password': 'Nieprawidłowe hasło pokoju',
+            'room-locked': 'Pokój jest zablokowany przez gospodarza — nowe osoby nie mogą dołączyć',
+            kicked: `Gospodarz usunął Cię z tego pokoju — możesz wrócić za ${result.minutes ?? 10} min`,
+          };
+          return sendError(ws, result.code, messages[result.code]);
         }
+        // A reconnecting host keeps the role.
+        if (resumedHost) rooms.setHost(msg.room, client.id);
         if (creating) guard.roomCreated(msg.room, ip, privileged);
         const policy = policyFor(msg.room);
         send(ws, {
@@ -262,7 +312,9 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
           pref: policy.pref,
           sfuAvailable: !!sfu,
           privileged,
+          roomState: rooms.state(msg.room),
         });
+        if (resumedHost) broadcastRoomState(msg.room);
         for (const other of rooms.others(client)) send(other.ws, { type: 'peer-joined', peer: peerInfo(client) });
         const d = policy.participantsChanged(result.peers.length + 1, undefined, allE2ee(msg.room));
         if (d) announceMode(msg.room, d.reason);
@@ -286,6 +338,8 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         case 'leave':
           leave('leave');
           return;
+        case 'moderate':
+          return moderate(msg.action, msg.target);
         case 'quality': {
           const policy = policyFor(client.roomId);
           if (policy.mode !== 'mesh') return;

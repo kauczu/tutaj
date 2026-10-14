@@ -1,4 +1,6 @@
-import type { ClientMessage, SfuMethod, SignalData } from '@tutaj/shared';
+import type { ClientMessage, ModerationAction, SfuMethod, SignalData } from '@tutaj/shared';
+
+const MODERATION_ACTIONS = new Set<ModerationAction>(['kick', 'mute', 'mute-all', 'make-host', 'lock', 'unlock']);
 
 const SFU_METHODS = new Set<SfuMethod>([
   'capabilities',
@@ -94,6 +96,11 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     }
     case 'leave':
       return { type: 'leave' };
+    case 'moderate': {
+      if (!MODERATION_ACTIONS.has(msg.action as ModerationAction)) return null;
+      if (msg.target !== undefined && !isString(msg.target, 64)) return null;
+      return { type: 'moderate', action: msg.action as ModerationAction, target: msg.target as string | undefined };
+    }
     case 'quality': {
       const r = msg.report;
       if (!isObject(r)) return null;

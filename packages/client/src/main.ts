@@ -128,6 +128,16 @@ async function initLobby(): Promise<void> {
   serverInput.value = params.get('server') ?? store.get('server');
   ownerKeyInput.value = store.get('ownerKey');
   renderBranding();
+  // A message carried over the reload after leaving a call (e.g. removed by the host).
+  try {
+    const notice = sessionStorage.getItem('tutaj:notice');
+    if (notice) {
+      sessionStorage.removeItem('tutaj:notice');
+      showError(notice);
+    }
+  } catch {
+    /* no storage */
+  }
   renderQualityForm($('quality-lobby'), media, (msg) => showError(msg));
   if (params.get('room')) joinBtn.textContent = `Dołącz do „${params.get('room')}”`;
 

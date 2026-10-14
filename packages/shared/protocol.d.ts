@@ -86,14 +86,32 @@ export type ClientMessage =
   | { type: 'signal'; to: string; sid: string; data: SignalData }
   /** Opaque app payload forwarded to one peer (`to`) or everyone else in the room. */
   | { type: 'relay'; to?: string; payload: unknown }
+  /** Host only: moderate the room (see ModerationAction). */
+  | { type: 'moderate'; action: ModerationAction; target?: string }
   | { type: 'leave' }
   | { type: 'quality'; report: QualityReport }
   | { type: 'set-mode'; pref: ModePreference }
   /** Request to the SFU; answered by `sfu-response` with the same `id`. Payloads are mediasoup objects. */
   | { type: 'sfu'; id: number; method: SfuMethod; data?: Record<string, unknown> };
 
+/**
+ * kick: remove from the room (and keep out for a while); mute / mute-all: turn microphones off
+ * (the participant may turn theirs on again); make-host: hand the host role over; lock/unlock: no new joins.
+ */
+export type ModerationAction = 'kick' | 'mute' | 'mute-all' | 'make-host' | 'lock' | 'unlock';
+
+/** Who moderates the room, and whether it accepts new participants. */
+export interface RoomState {
+  host: string | null;
+  locked: boolean;
+}
+
 export type ErrorCode =
   | 'room-full'
+  | 'room-locked'
+  /** Removed by the host; joining again is blocked for a while. */
+  | 'kicked'
+  | 'not-host'
   | 'bad-password'
   | 'invalid-message'
   | 'not-joined'
@@ -118,6 +136,8 @@ export type ServerMessage =
       sfuAvailable: boolean;
       /** The server recognised the owner key or a trusted IP — no limits apply to this client. */
       privileged: boolean;
+      /** Host and lock state of the room. */
+      roomState: RoomState;
     }
   /** Room media mode changed (or the preference did). `by` names who changed the preference. */
   | { type: 'mode'; mode: MediaMode; pref: ModePreference; reason: ModeReason; by?: string }
@@ -126,7 +146,10 @@ export type ServerMessage =
   | ({ type: 'sfu-notify' } & SfuNotification)
   | { type: 'peer-joined'; peer: PeerInfo }
   /** `disconnect` = socket dropped (the P2P call may still be alive); `leave` = left on purpose. */
-  | { type: 'peer-left'; id: string; reason: 'leave' | 'disconnect' }
+  | { type: 'peer-left'; id: string; reason: 'leave' | 'disconnect' | 'kicked' }
+  | ({ type: 'room-state' } & RoomState)
+  /** To the moderated participant: `action` done by the host `by` (name). */
+  | { type: 'moderated'; action: 'mute' | 'kick'; by: string }
   | { type: 'signal'; from: string; sid: string; data: SignalData }
   | { type: 'relay'; from: string; payload: unknown }
   | { type: 'error'; code: ErrorCode; message: string };
