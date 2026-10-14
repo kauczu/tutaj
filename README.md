@@ -130,7 +130,8 @@ Instalator nie jest podpisany – Windows SmartScreen przy pierwszym uruchomieni
 
 Od wersji 0.3.1 aplikacja kilka sekund po starcie sprawdza najnowsze wydanie na GitHubie (`electron-updater`,
 pliki `latest.yml` i `.blockmap` publikowane obok instalatora). Gdy jest nowsza wersja, pyta: **Aktualizuj** /
-**Później** / **Pomiń tę wersję**. Po zgodzie pobiera ją w tle (postęp na ikonie na pasku zadań), sprawdza sumę
+**Później** / **Pomiń tę wersję**. Po zgodzie pobiera ją z okienkiem postępu (procent, MB, prędkość; „Ukryj” –
+pobieranie trwa w tle z postępem na ikonie na pasku zadań, „Anuluj”), sprawdza sumę
 SHA-512, instaluje po cichu i uruchamia się ponownie – a jeśli trwa rozmowa, najpierw pyta, czy ją przerwać
 (albo instaluje przy zamknięciu aplikacji). Ręcznie: menu (Alt) → „Sprawdź aktualizacje…”.
 
