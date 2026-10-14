@@ -1,0 +1,140 @@
+name: Docker image
+
+# Publishes the server image to GitHub Container Registry (ghcr.io/<owner>/<repo>):
+#   latest, sha-<commit>  — every master commit that passed CI
+#   X.Y.Z, X.Y            — release tags vX.Y.Z
+# Built natively for amd64 and arm64 (no emulation: mediasoup's worker is C++).
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master, main]
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: image-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    # After CI only when it passed, and only for pushes (not pull requests from forks).
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    name: Build (${{ matrix.platform }})
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Image name (lowercase)
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.title=Tutaj
+            org.opencontainers.image.description=Tutaj — wideorozmowy dla 2–4 osób (P2P + SFU)
+          outputs: type=image,name=${{ steps.name.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+
+      - name: Smoke test (the image starts, answers, and the SFU worker runs on this architecture)
+        run: |
+          docker run -d --name smoke -p 3000:3000 "${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}"
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/api/info && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3000/api/info
+          docker logs smoke 2>&1 | grep -E 'SFU +[0-9]' || { docker logs smoke; exit 1; }
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.runner }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  publish:
+    name: Publish tags
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Image name, commit
+        id: name
+        env:
+          # After CI: the commit CI tested (github.sha would be the branch head at this moment).
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "short=${SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.name.outputs.image }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'master') }}
+            type=raw,value=sha-${{ steps.name.outputs.short }},enable=${{ github.event_name != 'push' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          sep-tags: ' '
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch tags
+        working-directory: /tmp/digests
+        run: |
+          args=()
+          for t in ${{ steps.meta.outputs.tags }}; do args+=(-t "$t"); done
+          [ ${#args[@]} -gt 0 ] || { echo "no tags to publish"; exit 0; }
+          docker buildx imagetools create "${args[@]}" $(printf '${{ steps.name.outputs.image }}@sha256:%s ' *)
+
+      - name: Inspect
+        run: |
+          for t in ${{ steps.meta.outputs.tags }}; do docker buildx imagetools inspect "$t" | head -20; break; done

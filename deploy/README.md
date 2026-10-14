@@ -4,7 +4,7 @@ Efekt: `https://<twoja-domena>` z aplikacją, SFU i serwerem TURN. Wszystko dzia
 
 | Usługa | Rola | Porty |
 |---|---|---|
-| `tutaj` | sygnalizacja, klient (PWA), SFU (mediasoup) | 40000 tcp+udp |
+| `tutaj` | sygnalizacja, klient (PWA), SFU (mediasoup) – gotowy obraz `ghcr.io/kauczu/tutaj` (amd64, arm64) | 40000 tcp+udp |
 | `caddy` | HTTPS z automatycznym certyfikatem Let's Encrypt | 80, 443 tcp |
 | `coturn` | TURN – przekaźnik dla sieci, w których P2P nie przejdzie | 3478 tcp+udp, 49160–49200 udp |
 
@@ -44,24 +44,23 @@ Jeśli dostawca ma zaporę w panelu (Hetzner Cloud Firewall, OVH, Oracle Securit
 
 Zaporę systemową (`ufw`) skrypt instalacyjny skonfiguruje sam.
 
-## 3. Wgranie projektu na serwer
+## 3. Pobranie projektu na serwer
 
-Repozytorium jest prywatne, więc najprościej przesłać paczkę z bieżącą wersją. Na swoim komputerze, w katalogu `tutaj`
-(PowerShell lub Git Bash):
+Na serwerze (`ssh uzytkownik@IP_SERWERA`), jako zwykły użytkownik:
 
-```powershell
-git archive --format=tar.gz -o tutaj.tar.gz HEAD
-scp tutaj.tar.gz uzytkownik@IP_SERWERA:~
+```bash
+sudo apt-get install -y git   # jeśli go nie ma
+git clone https://github.com/kauczu/tutaj.git ~/tutaj
 ```
 
-`git archive` bierze zatwierdzony stan repozytorium (bez `node_modules`), więc niezatwierdzone zmiany nie trafią na serwer.
+Z repozytorium potrzebne są tylko pliki wdrożenia (`deploy/`); sama aplikacja przychodzi jako gotowy obraz Dockera
+z `ghcr.io`, budowany i testowany przez CI dla każdej zmiany.
 
 ## 4. Instalacja
 
 Na serwerze (`ssh uzytkownik@IP_SERWERA`):
 
 ```bash
-mkdir -p ~/tutaj && tar -xzf ~/tutaj.tar.gz -C ~/tutaj
 cd ~/tutaj/deploy
 sudo bash install.sh rozmowa.tutaj.eu.org
 ```
@@ -73,9 +72,16 @@ Skrypt:
 3. instaluje Dockera z oficjalnego repozytorium (jeśli go nie ma),
 4. dodaje reguły `ufw` (nie włącza zapory, jeśli jest wyłączona – SSH zostaje dozwolony),
 5. tworzy `deploy/.env` z losowymi sekretami TURN i sesji (tylko przy pierwszym uruchomieniu),
-6. buduje i uruchamia kontenery, sprawdza aplikację i SFU.
+6. pobiera obraz aplikacji, uruchamia kontenery, sprawdza aplikację i SFU.
 
-Pierwsze budowanie trwa kilka minut. Skrypt można bezpiecznie uruchomić ponownie.
+Skrypt można bezpiecznie uruchomić ponownie.
+
+**Budowanie na serwerze zamiast gotowego obrazu** (własne zmiany w kodzie albo brak dostępu do `ghcr.io`):
+`sudo TUTAJ_BUILD=1 bash install.sh …` – obraz powstaje z kodu obok (`docker-compose.build.yml`), pierwszy raz kilka
+minut. `TUTAJ_BUILD=0` wraca do gotowego obrazu. Gdy pobranie obrazu się nie uda, skrypty same budują go lokalnie.
+
+**Konkretna wersja** zamiast najnowszej: `TUTAJ_VERSION=0.3` (albo `0.3.0`) w `deploy/.env`. Domyślnie `latest` –
+najnowszy stan gałęzi głównej, który przeszedł testy.
 
 ### Serwer z innymi usługami (port 80/443 zajęty)
 
@@ -136,17 +142,31 @@ cd ~/tutaj/deploy && docker compose logs -f          # logi wszystkich usług
 
 ## Aktualizacja
 
-Na komputerze: `git archive …` i `scp …` jak w kroku 3. Na serwerze:
-
 ```bash
-rm -rf ~/tutaj.new && mkdir ~/tutaj.new && tar -xzf ~/tutaj.tar.gz -C ~/tutaj.new
-cp ~/tutaj/deploy/.env ~/tutaj.new/deploy/.env
-rm -rf ~/tutaj.old && mv ~/tutaj ~/tutaj.old && mv ~/tutaj.new ~/tutaj
-cd ~/tutaj/deploy && sudo docker compose up -d --build
+cd ~/tutaj/deploy && sudo ./update.sh
 ```
 
-`.env` przenosi się ze starej wersji – sekrety się nie zmieniają, a dzięki `SESSION_SECRET` trwające rozmowy
-po restarcie wracają bez renegocjacji. Poprzednia wersja zostaje w `~/tutaj.old` (cofnięcie: zamień katalogi i `up -d --build`).
+Skrypt pobiera nowe pliki wdrożenia (`git pull`), nowy obraz z `ghcr.io`, restartuje kontener, usuwa stary obraz
+i pokazuje wersję przed i po (`wersja 0.3.0 → 0.3.1`). `.env` zostaje nietknięty – sekrety się nie zmieniają, a dzięki
+`SESSION_SECRET` trwające rozmowy po restarcie wracają bez renegocjacji. Gdy opis wydania wspomina o nowych
+ustawieniach serwera, uruchom zamiast tego ponownie `sudo bash install.sh <domena>` (dopisze brakujące wartości do `.env`).
+
+Cofnięcie do poprzedniej wersji: `TUTAJ_VERSION=0.3.0` w `.env` i `sudo ./update.sh --no-git`.
+
+### Przejście ze starszej instalacji (z paczki `tutaj.tar.gz`)
+
+Jednorazowo – nowy katalog z `git clone`, przeniesienie `.env`, uruchomienie:
+
+```bash
+git clone https://github.com/kauczu/tutaj.git ~/tutaj.new
+sudo cp ~/tutaj/deploy/.env ~/tutaj.new/deploy/.env
+cd ~/tutaj/deploy && sudo docker compose down
+mv ~/tutaj ~/tutaj.old && mv ~/tutaj.new ~/tutaj
+cd ~/tutaj/deploy && sudo ./update.sh --no-git
+```
+
+Konfiguracja reverse proxy (nginx/Apache) się nie zmienia – aplikacja nadal słucha na tym samym porcie.
+Po sprawdzeniu, że działa, `~/tutaj.old` można usunąć.
 
 ## Gdy coś nie działa
 

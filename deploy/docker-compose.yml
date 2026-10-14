@@ -2,7 +2,11 @@
 #   Tutaj (signaling + web client + SFU) behind Caddy (automatic HTTPS) + coturn (TURN relay).
 #
 #   sudo ./install.sh <domain>   # Docker, ports, firewall rules, .env, start (see README.md)
-#   docker compose up -d --build
+#   sudo ./update.sh             # newest version: deploy files (git) + image (GHCR), restart
+#
+# The image comes ready-made from GHCR (amd64 + arm64). TUTAJ_VERSION in .env pins a release
+# (e.g. 0.3 or 0.3.0; default: latest = newest tested master). To build from source on the server
+# instead, see docker-compose.build.yml (install.sh with TUTAJ_BUILD=1).
 #
 # Ports: 3478 (tcp+udp, TURN) · 40000 (tcp+udp, SFU) · 49160-49200 (udp, TURN relay)
 #        + 80, 443 (tcp) when the bundled Caddy is used.
@@ -13,7 +17,7 @@ x-logging: &logging
 
 services:
   tutaj:
-    build: ..
+    image: ${TUTAJ_IMAGE:-ghcr.io/kauczu/tutaj}:${TUTAJ_VERSION:-latest}
     restart: unless-stopped
     logging: *logging
     ports:

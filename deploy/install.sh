@@ -3,6 +3,10 @@
 #
 #   sudo ./install.sh rozmowa.tutaj.eu.org [PUBLIC_IP]
 #
+# The app image is pulled ready-made from ghcr.io. To build it here from the source instead:
+#   sudo TUTAJ_BUILD=1 ./install.sh …   (TUTAJ_BUILD=0 switches back to the ready-made image)
+# Later updates: sudo ./update.sh
+#
 # Works next to other services: if ports 80/443 are already taken by a web server,
 # the bundled Caddy is skipped and the app listens on 127.0.0.1 only; the script then
 # prepares a reverse-proxy config for the existing server (nginx, Apache, Caddy).
@@ -46,7 +50,7 @@ set_env() {
 [[ -n "$DOMAIN" ]] || die "Podaj domenę, np.: sudo ./install.sh rozmowa.tutaj.eu.org"
 [[ "$DOMAIN" =~ ^[a-zA-Z0-9.-]+$ ]] || die "Nieprawidłowa domena: $DOMAIN"
 [[ $EUID -eq 0 ]] || die "Uruchom jako root: sudo ./install.sh $DOMAIN"
-[[ -f "$DIR/docker-compose.yml" && -f "$DIR/../Dockerfile" ]] || die "Uruchom skrypt z katalogu deploy/ rozpakowanego projektu."
+[[ -f "$DIR/docker-compose.yml" && -f "$DIR/update.sh" ]] || die "Uruchom skrypt z katalogu deploy/ projektu (git clone https://github.com/kauczu/tutaj)."
 
 # shellcheck disable=SC1091
 . /etc/os-release
@@ -185,23 +189,14 @@ set_env PUBLIC_IP "$PUBLIC_IP"
 set_env TUTAJ_HTTP_PORT "$HTTP_PORT"
 if [[ $MODE == caddy ]]; then set_env COMPOSE_PROFILES caddy; else set_env COMPOSE_PROFILES ""; fi
 
-# --- Start ------------------------------------------------------------------------
-say "Budowanie i uruchamianie (pierwszy raz kilka minut)"
-docker compose up -d --build --remove-orphans
-docker compose ps
+# Ready-made image (default) or built here from the source.
+case "${TUTAJ_BUILD:-}" in
+  1) set_env COMPOSE_FILE docker-compose.yml:docker-compose.build.yml ;;
+  0) sed -i '/^COMPOSE_FILE=/d' "$ENV_FILE" ;;
+esac
 
-say "Sprawdzanie"
-healthy=0
-for _ in $(seq 1 30); do
-  if curl -fsS --max-time 3 "http://127.0.0.1:$HTTP_PORT/api/health" >/dev/null 2>&1; then healthy=1; break; fi
-  sleep 2
-done
-if [[ $healthy -eq 1 ]]; then echo "Aplikacja: działa (http://127.0.0.1:$HTTP_PORT)"; else warn "Aplikacja nie odpowiada — sprawdź: docker compose logs tutaj"; fi
-if docker compose logs tutaj 2>/dev/null | grep -qE 'SFU +[0-9]'; then
-  echo "SFU: działa ($(docker compose logs tutaj | grep -oE 'SFU +[0-9.:]+' | tail -1 | tr -s ' '))"
-else
-  warn "SFU nie wystartowało — sprawdź: docker compose logs tutaj"
-fi
+# --- Start (the same as an update, without git) -----------------------------------------
+bash "$DIR/update.sh" --no-git
 
 if [[ $MODE == caddy ]]; then
   cat <<EOF

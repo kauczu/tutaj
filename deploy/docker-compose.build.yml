@@ -1,0 +1,8 @@
+# Build the Tutaj image on this server from the source next to it, instead of pulling it from GHCR
+# (own changes to the code, or no access to ghcr.io). Enabled by install.sh with TUTAJ_BUILD=1,
+# which sets in .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+services:
+  tutaj:
+    build: ..
+    pull_policy: build
