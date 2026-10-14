@@ -1,3 +1,5 @@
+import { isReaction, type Reaction } from './ui/reactions';
+
 // Messages exchanged between peers (over the "app" DataChannel, or relayed by the server as fallback).
 
 export interface PeerState {
@@ -16,7 +18,9 @@ export type AppMessage =
   /** Our frame key for SFU media (end-to-end encryption). Only ever over the P2P DataChannel. */
   | { t: 'e2ee-key'; index: number; key: string }
   /** "Send me your current key" — after frames arrived that we could not decrypt. */
-  | { t: 'e2ee-key-request' };
+  | { t: 'e2ee-key-request' }
+  /** A quick reaction (one of REACTIONS). */
+  | { t: 'reaction'; e: Reaction };
 
 // Control frames on the "file" DataChannel; binary frames in between carry file chunks.
 export type FileControl =
@@ -45,6 +49,7 @@ export function parseAppMessage(v: unknown): AppMessage | null {
     return { t: 'e2ee-key', index: v.index as number, key: v.key };
   }
   if (v.t === 'e2ee-key-request') return { t: 'e2ee-key-request' };
+  if (v.t === 'reaction' && isReaction(v.e)) return { t: 'reaction', e: v.e };
   if (v.t === 'chat' && str(v.id, 64) && str(v.text, MAX_CHAT_LENGTH) && typeof v.ts === 'number') {
     return { t: 'chat', id: v.id, text: v.text, ts: v.ts };
   }

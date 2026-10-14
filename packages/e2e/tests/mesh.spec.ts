@@ -103,3 +103,26 @@ test('lobby shows server errors: wrong password and full room', async ({ browser
   await expect(second.page.locator('#lobby-error')).toContainText('Pokój jest pełny');
   await closeAll(first, second, small);
 });
+
+test('reactions: picked with the button or R + digit, float over the sender tile for everyone', async ({ browser }) => {
+  const ania = await Participant.join(browser, srv.url, 'reakcje', 'Ania');
+  const bartek = await Participant.join(browser, srv.url, 'reakcje', 'Bartek');
+  await bartek.expectVideoFrom('Ania');
+
+  await ania.page.click('#btn-react');
+  await expect(ania.page.locator('#reaction-picker')).toBeVisible();
+  await ania.page.locator('#reaction-picker button', { hasText: '👍' }).click();
+  await expect(ania.page.locator('#reaction-picker')).toBeHidden();
+  await expect(bartek.tile('Ania').locator('.reaction')).toHaveText('👍');
+  await expect(ania.page.locator('.tile.local .reaction')).toHaveText('👍');
+  // Gone after the animation.
+  await expect(bartek.tile('Ania').locator('.reaction')).toHaveCount(0, { timeout: 5000 });
+
+  // Keyboard: R opens the picker, 3 = 😂.
+  await bartek.page.keyboard.press('r');
+  await expect(bartek.page.locator('#reaction-picker')).toBeVisible();
+  await bartek.page.keyboard.press('3');
+  await expect(ania.tile('Bartek').locator('.reaction')).toHaveText('😂');
+
+  await closeAll(ania, bartek);
+});

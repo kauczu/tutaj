@@ -218,6 +218,24 @@ details[hidden] { display: none; }
 .tile.muted .mic-off { display: inline-flex; }
 .tile .hand { display: none; position: absolute; top: 10px; left: 10px; font-size: 28px; animation: wave 1s ease-in-out infinite alternate; }
 .tile.hand-up .hand { display: block; }
+/* ---- Reactions ---- */
+.reaction { position: absolute; bottom: 8%; z-index: 3; pointer-events: none; font-size: clamp(30px, 5vw, 64px);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6)); animation: reaction-float 2600ms ease-out forwards; }
+@keyframes reaction-float {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  12% { transform: translateY(-8%) scale(1.15); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translateY(-260%) scale(1); opacity: 0; }
+}
+.reaction-picker { position: fixed; z-index: 20; display: flex; gap: 4px; padding: 6px; border-radius: 16px;
+  background: var(--glass-strong); border: 1px solid var(--border-strong); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.reaction-picker[hidden] { display: none; }
+.reaction-picker button { position: relative; width: 46px; height: 46px; border-radius: 12px; border: 0; background: none;
+  font-size: 26px; cursor: pointer; line-height: 1; }
+.reaction-picker button:hover, .reaction-picker button:focus-visible { background: var(--glass-hover); outline: none; }
+.reaction-picker button kbd { position: absolute; right: 3px; bottom: 2px; font-size: 9px; padding: 0 3px; min-width: 0;
+  border-radius: 4px; opacity: 0.7; }
 @keyframes wave { to { transform: rotate(14deg); } }
 .tile .quality { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
 .tile .quality.good { background: var(--ok); box-shadow: 0 0 6px rgba(79, 209, 165, 0.7); }

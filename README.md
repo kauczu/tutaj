@@ -27,10 +27,11 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - wideo + audio w siatce do 4 osób, wskaźnik mówiącego, przypinanie kafelka, pełny ekran (dwuklik)
 - udostępnianie ekranu (w desktopie: wybór ekranu/okna)
 - czat i **przesyłanie plików P2P** (DataChannel, do 2 GB, z kontrolą przepływu; przeciągnij-upuść)
+- **reakcje** (👍 ❤️ 😂 😮 👏 🎉 – przycisk lub R, potem 1–6) unoszące się nad kafelkiem, także na nakładce w grze
 - podnoszenie ręki, wyciszanie, wyłączanie kamery (zwalnia urządzenie), wybór mikrofonu/kamery/głośnika
 - **nagrywanie lokalne** całej rozmowy (kompozycja kafelków + miks audio → plik `.webm`)
 - statystyki połączenia (RTT, straty, P2P/TURN) i wskaźnik jakości na kafelkach
-- hasło pokoju, link z zaproszeniem, skróty klawiszowe (M, V, S, H, C)
+- hasło pokoju, link z zaproszeniem, skróty klawiszowe (M, V, S, H, C, R)
 - **rozmowa przetrwa awarię serwera** – trwające połączenia P2P działają dalej, klient sam wraca i wznawia sesję
 - **hybryda P2P/SFU** – automatyczne przełączanie (lub ręczne: Ustawienia → Tryb mediów), simulcast, wskaźnik P2P/SFU na pasku
 - **nakładka na grę** (aplikacja desktopowa) – małe kamery współgraczy nad grą, skróty działające w grze

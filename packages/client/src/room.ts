@@ -16,6 +16,7 @@ import { setIcon } from './ui/icons';
 import { acceleratorFromEvent, formatAccelerator, type HotkeyName } from './ui/hotkeys';
 import { GameOverlay, type OverlaySettings } from './ui/overlay';
 import { renderQualityForm } from './ui/quality-form';
+import { REACTIONS, type Reaction } from './ui/reactions';
 import { toast } from './ui/toast';
 
 export interface RoomOptions {
@@ -128,6 +129,8 @@ export class Room {
   /** Prefer H.264 on new connections (hardware encoder available or chosen by the user). */
   private h264 = false;
   private hand = false;
+  private lastReactionSent = 0;
+  private readonly lastReactionFrom = new Map<string, number>();
   private leaving = false;
   private readonly media: LocalMedia;
   private readonly grid = new Grid($('grid'));
@@ -438,6 +441,12 @@ export class Room {
       this.grid.get(from)?.setState(msg.state);
     } else if (msg.t === 'chat') {
       this.chat.addMessage(peer.state.name, msg.text, msg.ts, false);
+    } else if (msg.t === 'reaction') {
+      // No floods: at most ~4 per second per participant.
+      const now = Date.now();
+      if (now - (this.lastReactionFrom.get(from) ?? 0) < 250) return;
+      this.lastReactionFrom.set(from, now);
+      this.grid.get(from)?.react(msg.e);
     }
   }
 
@@ -671,6 +680,8 @@ export class Room {
     on('btn-cam', () => void this.toggleCam());
     on('btn-screen', () => void this.toggleScreen());
     on('btn-hand', () => this.toggleHand());
+    on('btn-react', () => this.toggleReactionPicker());
+    this.buildReactionPicker();
     on('btn-chat', () => this.chat.toggle());
     on('btn-record', () => void this.toggleRecording());
     on('btn-overlay', () => void this.setOverlay(!this.overlay?.isOpen));
@@ -684,7 +695,18 @@ export class Room {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (e.ctrlKey || e.metaKey || e.altKey || t.closest('input, textarea, select, dialog')) return;
+      // Reaction picker open: 1–6 pick, Esc closes.
+      if (!$('reaction-picker').hidden) {
+        const n = Number(e.key);
+        if (n >= 1 && n <= REACTIONS.length) {
+          e.preventDefault();
+          this.sendReaction(REACTIONS[n - 1]);
+          return this.toggleReactionPicker(false);
+        }
+        if (e.key === 'Escape') return this.toggleReactionPicker(false);
+      }
       const actions: Record<string, () => void> = {
+        r: () => this.toggleReactionPicker(),
         m: () => void this.toggleMic(),
         v: () => void this.toggleCam(),
         s: () => void this.toggleScreen(),
@@ -722,6 +744,7 @@ export class Room {
     setIcon($('btn-record'), 'record');
     $('btn-record').classList.toggle('recording', this.recorder.active);
     setIcon($('btn-settings'), 'settings');
+    setIcon($('btn-react'), 'react');
     setIcon($('btn-overlay'), 'overlay');
     $('btn-overlay').classList.toggle('active', !!this.overlay?.isOpen);
     $('btn-overlay').setAttribute('aria-pressed', String(!!this.overlay?.isOpen));
@@ -939,6 +962,52 @@ export class Room {
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'NotAllowedError')) toast(`Ekran: ${describeMediaError(e)}`, 'error');
     }
+  }
+
+  // --- Reactions ------------------------------------------------------------
+
+  private buildReactionPicker(): void {
+    const picker = $('reaction-picker');
+    picker.replaceChildren(
+      ...REACTIONS.map((emoji, i) => {
+        const b = h('button', { title: `Reakcja ${emoji} (${i + 1})` }, emoji, h('kbd', { text: String(i + 1) }));
+        b.type = 'button';
+        b.setAttribute('role', 'menuitem');
+        b.onclick = () => {
+          this.sendReaction(emoji);
+          this.toggleReactionPicker(false);
+        };
+        return b;
+      }),
+    );
+    const outside = (e: PointerEvent) => {
+      if (!picker.hidden && !picker.contains(e.target as Node) && !$('btn-react').contains(e.target as Node)) this.toggleReactionPicker(false);
+    };
+    document.addEventListener('pointerdown', outside);
+    this.cleanups.push(() => document.removeEventListener('pointerdown', outside));
+  }
+
+  /** Opens the picker above its button (or closes it). */
+  private toggleReactionPicker(open?: boolean): void {
+    const picker = $('reaction-picker');
+    const btn = $('btn-react');
+    const show = open ?? picker.hidden;
+    picker.hidden = !show;
+    btn.setAttribute('aria-expanded', String(show));
+    btn.classList.toggle('active', show);
+    if (!show) return;
+    const r = btn.getBoundingClientRect();
+    const w = picker.offsetWidth;
+    picker.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+    picker.style.bottom = `${window.innerHeight - r.top + 10}px`;
+  }
+
+  private sendReaction(emoji: Reaction): void {
+    const now = Date.now();
+    if (now - this.lastReactionSent < 300) return;
+    this.lastReactionSent = now;
+    this.localTile.react(emoji);
+    this.sendApp({ t: 'reaction', e: emoji });
   }
 
   private toggleHand(): void {

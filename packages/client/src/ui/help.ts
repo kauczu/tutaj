@@ -37,6 +37,7 @@ async function content(): Promise<HTMLElement[]> {
         ['S', 'udostępnianie ekranu'],
         ['H', 'podnieś/opuść rękę'],
         ['C', 'czat'],
+        ['R', 'reakcja — potem 1–6 (👍 ❤️ 😂 😮 👏 🎉)'],
         ['F1', 'ta pomoc'],
       ]),
       list(

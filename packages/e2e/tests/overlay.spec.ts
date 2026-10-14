@@ -97,6 +97,11 @@ test('game overlay: cameras of the others, muted badge, size reported to the app
   await expect(overlay.locator('#muted-badge')).toBeVisible();
   await expect(bartek.tile('Ania')).toHaveClass(/muted/);
 
+  // Reactions of the others float over their overlay tiles too.
+  await bartek.page.click('#btn-react');
+  await bartek.page.locator('#reaction-picker button', { hasText: '🎉' }).click();
+  await expect(overlay.locator('.tile .reaction')).toHaveText('🎉');
+
   // Others' state: camera off becomes a slim row, size follows.
   await bartek.page.click('#btn-cam');
   await expect(overlay.locator('.tile')).toHaveClass(/no-video/);

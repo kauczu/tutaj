@@ -2,6 +2,7 @@ import type { PeerState } from '../messages';
 import type { PeerStats } from '../peer';
 import { h } from './dom';
 import { icon } from './icons';
+import { floatReaction } from './reactions';
 
 const QUALITY_LABEL = { good: 'Dobre połączenie', fair: 'Średnie połączenie', poor: 'Słabe połączenie', unknown: 'Łączenie…' };
 
@@ -16,8 +17,10 @@ export class Tile {
   private readonly statusEl: HTMLDivElement;
   state: PeerState;
   speaking = false;
-  /** Set by the grid: called whatever changes what the tile shows (mirrored by the stage window). */
+  /** Set by the grid: called whatever changes what the tile shows (mirrored by the game overlay). */
   onChange: () => void = () => {};
+  /** Set by the grid: a reaction was shown on this tile. */
+  onReaction: (emoji: string) => void = () => {};
 
   constructor(readonly id: string, state: PeerState, readonly local: boolean) {
     this.state = state;
@@ -83,6 +86,12 @@ export class Tile {
     this.statusEl.hidden = !text;
   }
 
+  /** A reaction from this participant floats up over the tile. */
+  react(emoji: string): void {
+    floatReaction(this.el, emoji);
+    this.onReaction(emoji);
+  }
+
   setSpeaking(on: boolean): void {
     const speaking = on && this.state.audio;
     if (speaking === this.speaking) return;
@@ -97,6 +106,7 @@ export class Grid {
   private tiles = new Map<string, Tile>();
   private pinned: string | null = null;
   private listeners = new Set<() => void>();
+  private reactionListeners = new Set<(id: string, emoji: string) => void>();
   private pending = false;
 
   constructor(private readonly el: HTMLElement) {}
@@ -116,9 +126,18 @@ export class Grid {
     });
   }
 
+  /** Reactions shown on any tile (the overlay repeats them). */
+  onReaction(fn: (id: string, emoji: string) => void): () => void {
+    this.reactionListeners.add(fn);
+    return () => this.reactionListeners.delete(fn);
+  }
+
   add(tile: Tile): void {
     this.tiles.set(tile.id, tile);
     tile.onChange = () => this.changed();
+    tile.onReaction = (emoji) => {
+      for (const fn of this.reactionListeners) fn(tile.id, emoji);
+    };
     tile.el.addEventListener('click', () => this.pin(this.pinned === tile.id ? null : tile.id));
     tile.el.addEventListener('dblclick', () => {
       if (document.fullscreenElement) void document.exitFullscreen();

@@ -1,5 +1,6 @@
 import type { Grid, Tile } from './grid';
 import { icon } from './icons';
+import { REACTION_CSS, floatReaction } from './reactions';
 
 /** Popup name: the desktop app turns it into a transparent, click-through, always-on-top window. */
 export const OVERLAY_WINDOW_NAME = 'tutaj-overlay';
@@ -50,6 +51,8 @@ video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .label .mic { display: none; color: #ff6b70; }
 .label .mic svg { width: 15px; height: 15px; }
 .tile.muted .label .mic { display: inline-flex; }
+${REACTION_CSS}
+.tile.no-video .reaction { bottom: -10%; font-size: 26px; }
 `;
 
 interface OverlayTile {
@@ -71,6 +74,7 @@ export class GameOverlay {
   private win: Window | null = null;
   private tiles = new Map<string, OverlayTile>();
   private offGrid: (() => void) | null = null;
+  private offReactions: (() => void) | null = null;
   private lastSize = '';
 
   constructor(
@@ -91,6 +95,11 @@ export class GameOverlay {
     this.lastSize = '';
     this.build(win.document);
     this.offGrid = this.grid.onChange(() => this.render());
+    // Others' reactions float over their tiles here too.
+    this.offReactions = this.grid.onReaction((id, emoji) => {
+      const t = this.tiles.get(id);
+      if (t) floatReaction(t.el, emoji);
+    });
     this.render();
     return true;
   }
@@ -99,6 +108,8 @@ export class GameOverlay {
     const win = this.win;
     this.offGrid?.();
     this.offGrid = null;
+    this.offReactions?.();
+    this.offReactions = null;
     for (const t of this.tiles.values()) t.video.srcObject = null;
     this.tiles.clear();
     this.win = null;
