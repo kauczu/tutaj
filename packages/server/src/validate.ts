@@ -9,6 +9,7 @@ const SFU_METHODS = new Set<SfuMethod>([
   'producers',
   'consume',
   'resume-consumer',
+  'request-keyframe',
   'leave',
 ]);
 
@@ -79,6 +80,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
         password: (msg.password as string | undefined) || undefined,
         resume,
         ownerKey: (msg.ownerKey as string | undefined) || undefined,
+        e2ee: msg.e2ee === true,
       };
     }
     case 'signal': {

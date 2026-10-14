@@ -77,3 +77,14 @@ test('high-quality media (gaming profile): 3 people switch to SFU right away, 2 
   assert.equal(p.mode, 'mesh');
   assert.deepEqual(p.report('a', { ...ok, hq: true }, 3), { mode: 'sfu', reason: 'quality' });
 });
+
+test('SFU media must be end-to-end encrypted: a client that cannot keeps the room on P2P', () => {
+  const p = new ModePolicy(true);
+  assert.equal(p.participantsChanged(3, undefined, false), null);
+  assert.deepEqual(p.setPref('sfu', 3), null); // even a manual choice
+  assert.equal(p.mode, 'mesh');
+  // It leaves: the manual SFU choice applies.
+  assert.deepEqual(p.participantsChanged(2, 'old-client', true), { mode: 'sfu', reason: 'manual' });
+  // Someone without support joins an SFU room: back to P2P.
+  assert.deepEqual(p.participantsChanged(3, undefined, false), { mode: 'mesh', reason: 'e2ee' });
+});

@@ -202,14 +202,15 @@ export class Bot {
     ws.on('message', (d) => this.queue.push(JSON.parse(d.toString())));
   }
 
-  static async join(baseUrl: string, room: string, name = 'Bot'): Promise<Bot> {
+  /** `e2ee`: whether the bot claims it can encrypt SFU media (a client that can't keeps the room on P2P). */
+  static async join(baseUrl: string, room: string, name = 'Bot', e2ee = true): Promise<Bot> {
     const ws = new WebSocket(baseUrl.replace(/^http/, 'ws') + '/ws');
     await new Promise((resolve, reject) => {
       ws.once('open', resolve);
       ws.once('error', reject);
     });
     const bot = new Bot(ws);
-    bot.send({ type: 'join', room, name });
+    bot.send({ type: 'join', room, name, e2ee });
     await expect.poll(() => bot.received('welcome').length).toBe(1);
     return bot;
   }

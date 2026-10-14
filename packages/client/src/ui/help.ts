@@ -57,6 +57,18 @@ async function content(): Promise<HTMLElement[]> {
     ),
   ];
 
+  parts.push(
+    section(
+      'Prywatność i szyfrowanie',
+      list(
+        ['Rozmowy są ', b('szyfrowane end-to-end'), ' (znacznik ', b('E2EE'), ' na pasku): w trybie P2P robi to WebRTC, w trybie SFU każda klatka obrazu i dźwięku jest dodatkowo szyfrowana kluczami, które znają tylko uczestnicy — serwer przekazuje dane, których nie może odczytać.'],
+        ['Klucze wymieniacie bezpośrednio między sobą; po wyjściu kogoś z pokoju zmieniają się, więc ta osoba nie zobaczy dalszej części rozmowy.'],
+        [b('Kod bezpieczeństwa'), ': Ustawienia → tabela połączeń, kolumna „Kod”. Porównajcie go głosem — jeśli u obu jest taki sam, nikt (także serwer) nie podsłuchuje.'],
+        ['Czat i pliki płyną bezpośrednio między uczestnikami, też szyfrowane.'],
+      ),
+    ),
+  );
+
   if (overlay) {
     const hk = overlay.hotkeys;
     parts.push(

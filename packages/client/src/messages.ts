@@ -12,7 +12,11 @@ export type AppMessage =
   | { t: 'state'; state: PeerState }
   | { t: 'chat'; id: string; text: string; ts: number }
   /** Sent just before leaving, so peers drop the tile immediately even without the server. */
-  | { t: 'bye' };
+  | { t: 'bye' }
+  /** Our frame key for SFU media (end-to-end encryption). Only ever over the P2P DataChannel. */
+  | { t: 'e2ee-key'; index: number; key: string }
+  /** "Send me your current key" — after frames arrived that we could not decrypt. */
+  | { t: 'e2ee-key-request' };
 
 // Control frames on the "file" DataChannel; binary frames in between carry file chunks.
 export type FileControl =
@@ -37,6 +41,10 @@ export function parseAppMessage(v: unknown): AppMessage | null {
     };
   }
   if (v.t === 'bye') return { t: 'bye' };
+  if (v.t === 'e2ee-key' && Number.isInteger(v.index) && (v.index as number) >= 1 && (v.index as number) <= 255 && str(v.key, 64)) {
+    return { t: 'e2ee-key', index: v.index as number, key: v.key };
+  }
+  if (v.t === 'e2ee-key-request') return { t: 'e2ee-key-request' };
   if (v.t === 'chat' && str(v.id, 64) && str(v.text, MAX_CHAT_LENGTH) && typeof v.ts === 'number') {
     return { t: 'chat', id: v.id, text: v.text, ts: v.ts };
   }

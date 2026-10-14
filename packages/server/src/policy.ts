@@ -30,6 +30,7 @@ export class ModePolicy {
   mode: MediaMode = 'mesh';
   pref: ModePreference = 'auto';
   private health = new Map<string, PeerHealth>();
+  private e2ee = true;
 
   constructor(private sfuAvailable: boolean) {}
 
@@ -57,8 +58,10 @@ export class ModePolicy {
     return this.apply(participants);
   }
 
-  participantsChanged(participants: number, leftId?: string): Decision | null {
+  /** `allE2ee`: every participant can encrypt SFU media end to end (otherwise the room stays on P2P). */
+  participantsChanged(participants: number, leftId?: string, allE2ee = true): Decision | null {
     if (leftId) this.health.delete(leftId);
+    this.e2ee = allE2ee;
     return this.apply(participants);
   }
 
@@ -79,6 +82,8 @@ export class ModePolicy {
 
   private decide(n: number): Decision {
     if (!this.sfuAvailable) return { mode: 'mesh', reason: 'sfu-unavailable' };
+    // P2P is end-to-end encrypted by WebRTC itself; the SFU only with every client encrypting frames.
+    if (!this.e2ee) return { mode: 'mesh', reason: 'e2ee' };
     if (this.pref !== 'auto') return { mode: this.pref, reason: 'manual' };
     if (n <= 2) return { mode: 'mesh', reason: 'participants' };
     if (this.mode === 'sfu') return { mode: 'sfu', reason: 'participants' };

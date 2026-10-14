@@ -34,7 +34,7 @@ test('help: from the lobby footer, with F1 and from the settings; desktop parts 
 
   await page.locator('#lobby-footer').getByRole('button', { name: 'Pomoc' }).click();
   await expect(help).toBeVisible();
-  await expect(help.locator('h3')).toHaveText(['Rozpoczęcie rozmowy', 'W trakcie rozmowy', 'Jakość obrazu i dźwięku', 'Gdy coś nie działa']);
+  await expect(help.locator('h3')).toHaveText(['Rozpoczęcie rozmowy', 'W trakcie rozmowy', 'Jakość obrazu i dźwięku', 'Prywatność i szyfrowanie', 'Gdy coś nie działa']);
   // Plain browser: no overlay section, no desktop menu hint.
   await expect(help).not.toContainText('nakładka');
   await help.getByRole('button', { name: 'Zamknij' }).click();

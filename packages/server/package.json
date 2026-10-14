@@ -1,6 +1,6 @@
 {
   "name": "@tutaj/server",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Serwer sygnalizacji Tutaj (WebSocket) + hosting klienta + poświadczenia TURN.",
   "type": "module",
@@ -28,7 +28,7 @@
     "ws": "8.21.3"
   },
   "devDependencies": {
-    "@tutaj/shared": "0.3.1",
+    "@tutaj/shared": "0.4.0",
     "@types/node": "22.20.4",
     "@types/ws": "8.18.1",
     "tsx": "4.23.14"

@@ -55,7 +55,8 @@ function client() {
 async function join(room, name) {
   const c = client();
   await c.open();
-  c.send({ type: 'join', room, name });
+  // These clients claim end-to-end encryption: without it the room never uses the SFU.
+  c.send({ type: 'join', room, name, e2ee: true });
   return { c, welcome: await c.wait((m) => m.type === 'welcome') };
 }
 

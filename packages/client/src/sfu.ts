@@ -1,6 +1,7 @@
 import { Device, type types } from 'mediasoup-client';
 import type { IceServer, SfuMethod, SfuNotification, SfuProducerInfo } from '@tutaj/shared';
 import { Emitter } from './emitter';
+import type { E2ee } from './e2ee';
 import type { LocalMedia } from './media';
 import { SCREEN_BITRATE, simulcastBitrates, videoBudget, videoCap } from './quality';
 
@@ -37,6 +38,59 @@ function cameraScales(track: MediaStreamTrack): number[] {
 }
 
 /**
+ * Content-free stand-in for a track while its encryption is being confirmed: black video at the
+ * real track's size, or a disabled copy for audio. (A disabled video track would do too, but its
+ * tiny frames make Chromium settle on a software encoder — losing GPU encoding for the whole call.)
+ */
+function placeholderFor(track: MediaStreamTrack): { track: MediaStreamTrack; stop(): void } {
+  if (track.kind === 'audio') {
+    const silent = track.clone();
+    silent.enabled = false;
+    return { track: silent, stop: () => silent.stop() };
+  }
+  const { width = 1280, height = 720 } = track.getSettings();
+  const canvas = Object.assign(document.createElement('canvas'), { width, height });
+  const ctx = canvas.getContext('2d')!;
+  const paint = () => {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, width, height);
+  };
+  paint();
+  const timer = window.setInterval(paint, 100);
+  const black = canvas.captureStream(10).getVideoTracks()[0];
+  return {
+    track: black,
+    stop: () => {
+      clearInterval(timer);
+      black.stop();
+    },
+  };
+}
+
+/**
+ * Runs `create` and returns the RTCPeerConnection it constructs. mediasoup-client creates its
+ * connection synchronously inside createSendTransport/createRecvTransport and keeps it private,
+ * but the encryption transforms have to be attached during its negotiation (see E2ee.encrypt).
+ */
+function capturePeerConnection<T>(create: () => T): { result: T; pc: RTCPeerConnection } {
+  const Native = window.RTCPeerConnection;
+  let pc: RTCPeerConnection | null = null;
+  const Capturing = function (...args: ConstructorParameters<typeof RTCPeerConnection>) {
+    pc = new Native(...args);
+    return pc;
+  } as unknown as typeof RTCPeerConnection;
+  Capturing.prototype = Native.prototype;
+  window.RTCPeerConnection = Capturing;
+  try {
+    const result = create();
+    if (!pc) throw new Error('Nie udało się przygotować szyfrowania (brak połączenia SFU)');
+    return { result, pc };
+  } finally {
+    window.RTCPeerConnection = Native;
+  }
+}
+
+/**
  * Media through the server's SFU (mediasoup): one upstream per track no matter how many
  * peers, and one downstream per remote track.
  */
@@ -50,11 +104,17 @@ export class SfuSession extends Emitter<SfuEvents> {
   private streams = new Map<string, MediaStream>();
   private ops: Promise<void> = Promise.resolve();
   private closed = false;
+  /** Encryption transform of the sender mediasoup-client created last (one produce at a time). */
+  private lastSendTransform = 0;
+  /** Consumers being set up, by id (= the id of their remote track), for the 'track' event. */
+  private pendingConsumers = new Map<string, ConsumeInfo>();
 
   constructor(
     private readonly request: Request,
     private readonly media: LocalMedia,
     private readonly iceServers: IceServer[],
+    /** Every frame sent to and received from the SFU is encrypted end to end. */
+    private readonly e2ee: E2ee,
     /** Produce video as H.264 (hardware encoding) when the server supports it. */
     private readonly h264 = false,
   ) {
@@ -87,6 +147,13 @@ export class SfuSession extends Emitter<SfuEvents> {
     } else if (n.method === 'consumer-closed') this.closeConsumer(n.data.consumerId);
   }
 
+  /** A participant's key just arrived: their video needs a key frame to start decoding. */
+  requestKeyFrames(peerId: string): void {
+    for (const [id, c] of this.consumers) {
+      if (c.peerId === peerId && c.consumer.kind === 'video') void this.request('request-keyframe', { consumerId: id }).catch(() => {});
+    }
+  }
+
   /** Stats of our upstream (what we send to the SFU). */
   async sendStats(): Promise<RTCStatsReport | null> {
     return this.sendTransport && !this.closed ? this.sendTransport.getStats() : null;
@@ -114,7 +181,11 @@ export class SfuSession extends Emitter<SfuEvents> {
   private async createTransport(direction: 'send' | 'recv'): Promise<types.Transport> {
     const info = await this.request<TransportInfo>('create-transport', { direction });
     const params = { ...info, iceServers: this.iceServers as RTCIceServer[] };
-    const transport = direction === 'send' ? this.device!.createSendTransport(params) : this.device!.createRecvTransport(params);
+    const { result: transport, pc } = capturePeerConnection(() =>
+      direction === 'send' ? this.device!.createSendTransport(params) : this.device!.createRecvTransport(params),
+    );
+    if (direction === 'send') this.encryptSenders(pc);
+    else this.decryptReceivers(pc);
     transport.on('connect', ({ dtlsParameters }, callback, errback) => {
       this.request('connect-transport', { transportId: transport.id, dtlsParameters }).then(() => callback(), errback);
     });
@@ -127,6 +198,31 @@ export class SfuSession extends Emitter<SfuEvents> {
       if (state === 'failed' && !this.closed) this.emit('failed', new Error('Połączenie z SFU nieudane'));
     });
     return transport;
+  }
+
+  /** Every sender gets its encryption the moment mediasoup-client adds it — before negotiation. */
+  private encryptSenders(pc: RTCPeerConnection): void {
+    const add = pc.addTransceiver.bind(pc);
+    pc.addTransceiver = (trackOrKind: MediaStreamTrack | string, init?: RTCRtpTransceiverInit) => {
+      const transceiver = add(trackOrKind, init);
+      const kind = (typeof trackOrKind === 'string' ? trackOrKind : trackOrKind.kind) as 'audio' | 'video';
+      const mime = kind === 'audio' ? 'audio/opus' : this.videoCodec()?.mimeType ?? 'video/VP8';
+      this.lastSendTransform = this.e2ee.encrypt(transceiver.sender, kind, mime);
+      return transceiver;
+    };
+  }
+
+  /** Every consumer's receiver gets its decryption in the 'track' event, i.e. during negotiation. */
+  private decryptReceivers(pc: RTCPeerConnection): void {
+    pc.addEventListener('track', (e) => {
+      // mediasoup-client names the remote track after the consumer; its "probator" carries no media.
+      let info = this.pendingConsumers.get(e.track.id);
+      if (!info) {
+        const sameKind = [...this.pendingConsumers.values()].filter((c) => c.kind === e.track.kind);
+        if (e.track.id !== 'probator' && sameKind.length === 1) info = sameKind[0];
+      }
+      if (info) this.e2ee.decrypt(e.receiver, info.kind, info.rtpParameters.codecs[0]?.mimeType ?? '', info.peerId);
+    });
   }
 
   private async syncProducers(): Promise<void> {
@@ -142,8 +238,11 @@ export class SfuSession extends Emitter<SfuEvents> {
       if (producer) {
         if (producer.track !== track) await producer.replaceTrack({ track });
       } else if (track) {
+        // Start on a content-free stand-in (black / silence); the real track only once frames
+        // demonstrably pass through the encryption: not a single readable frame reaches the server.
+        const placeholder = placeholderFor(track);
         producer = this.producers[kind] = await this.sendTransport.produce({
-          track,
+          track: placeholder.track,
           stopTracks: false, // LocalMedia owns the tracks (also used by the preview and mesh)
           disableTrackOnPause: false,
           zeroRtpOnPause: true,
@@ -154,6 +253,17 @@ export class SfuSession extends Emitter<SfuEvents> {
               }
             : { encodings: this.encodingsFor(track), codec: this.videoCodec() }),
         });
+        try {
+          if (!producer.rtpSender?.transform) throw new Error('Szyfrowanie end-to-end nie działa w tej przeglądarce');
+          await this.e2ee.whenActive(this.lastSendTransform);
+        } catch (err) {
+          placeholder.stop();
+          await this.closeProducer(kind);
+          this.emit('failed', err instanceof Error ? err : new Error(String(err)));
+          return;
+        }
+        await producer.replaceTrack({ track });
+        placeholder.stop();
       }
     }
     await this.tuneBitrates();
@@ -174,11 +284,13 @@ export class SfuSession extends Emitter<SfuEvents> {
     return this.scalesFor(track).map((scaleResolutionDownBy, i) => ({ scaleResolutionDownBy, maxBitrate: bitrates[i] }));
   }
 
+  /** H.264, baseline profile preferred: the one Chromium encodes on the GPU (constrained baseline it doesn't). */
   private videoCodec(): types.RtpCodecCapability | undefined {
     if (!this.h264) return undefined;
-    return this.device?.rtpCapabilities.codecs?.find(
+    const h264 = (this.device?.rtpCapabilities.codecs ?? []).filter(
       (c) => c.mimeType.toLowerCase() === 'video/h264' && c.parameters?.['packetization-mode'] === 1,
     );
+    return h264.find((c) => String(c.parameters?.['profile-level-id']).toLowerCase().startsWith('4200')) ?? h264[0];
   }
 
   private async closeProducer(kind: 'audio' | 'video'): Promise<void> {
@@ -213,7 +325,18 @@ export class SfuSession extends Emitter<SfuEvents> {
     try {
       const info = await this.request<ConsumeInfo>('consume', { producerId, rtpCapabilities: this.device.recvRtpCapabilities });
       if (this.closed) return;
-      const consumer = await this.recvTransport.consume(info);
+      this.pendingConsumers.set(info.id, info);
+      let consumer: types.Consumer;
+      try {
+        consumer = await this.recvTransport.consume(info);
+      } finally {
+        this.pendingConsumers.delete(info.id);
+      }
+      // Without decryption the frames could not be read anyway; don't play garbage.
+      if (!consumer.rtpReceiver?.transform) {
+        consumer.close();
+        throw new Error('consumer without decryption');
+      }
       this.consumers.set(consumer.id, { consumer, peerId: info.peerId });
       let stream = this.streams.get(info.peerId);
       if (!stream) this.streams.set(info.peerId, (stream = new MediaStream()));

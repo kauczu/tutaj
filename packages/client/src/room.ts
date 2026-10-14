@@ -1,5 +1,6 @@
 import type { IceServer, MediaMode, ModePreference, ModeReason, QualityReport, ServerMessage } from '@tutaj/shared';
 import { SpeakingDetector, playCue } from './audio';
+import { E2ee, safetyCode } from './e2ee';
 import { FileReceiver, MAX_FILE_SIZE, formatBytes, sendFile } from './files';
 import { LocalMedia, describeMediaError } from './media';
 import { parseAppMessage, type AppMessage, type PeerState } from './messages';
@@ -46,8 +47,18 @@ const REASON_LABEL: Record<ModeReason, string> = {
   relay: 'połączenia przez serwer TURN',
   manual: 'wybór ręczny',
   quality: 'wysoka jakość obrazu lub dźwięku',
+  e2ee: 'uczestnik bez obsługi szyfrowania end-to-end',
   'sfu-unavailable': 'SFU niedostępne',
 };
+
+/** Test aid (E2E tests): drop the keys we receive — proves media can't be seen without them. */
+function ignoreKeysForTests(): boolean {
+  try {
+    return localStorage.getItem('tutaj:e2ee-debug') === 'ignore-keys';
+  } catch {
+    return false;
+  }
+}
 
 class JoinError extends Error {
   constructor(message: string, readonly fatal: boolean) {
@@ -82,6 +93,7 @@ async function connectAndJoin(
       password: opts.password,
       resume,
       ownerKey: opts.ownerKey,
+      e2ee: E2ee.supported(),
     });
   }).catch((err) => {
     signaling.close();
@@ -123,6 +135,10 @@ export class Room {
   private readonly chat: ChatPanel;
   private readonly speaking: SpeakingDetector;
   private readonly recorder: CallRecorder;
+  /** End-to-end encryption of SFU media (null: this browser can't — the room then stays on P2P). */
+  private readonly e2ee: E2ee | null;
+  /** Safety codes of the P2P connections (shown in the settings). */
+  private readonly codes = new Map<string, string>();
   /** Desktop app only. */
   private overlay: GameOverlay | null = null;
   private readonly startedAt = Date.now();
@@ -165,6 +181,8 @@ export class Room {
         ),
     );
 
+    this.e2ee = E2ee.supported() ? new E2ee((peer, problem) => this.onE2eeProblem(peer, problem)) : null;
+
     this.cleanups.push(this.media.on('change', () => this.onLocalMediaChange()));
     void this.initOverlay();
     this.bindControls();
@@ -201,7 +219,7 @@ export class Room {
 
     // Other peers only know our old id if we could not resume it.
     for (const id of [...this.peers.keys()]) {
-      if (!resumed || !this.present.has(id)) this.removePeer(id);
+      if (!resumed || !this.present.has(id)) this.peerGone(id);
     }
     for (const p of welcome.peers) {
       if (!this.peers.get(p.id)?.healthy) this.addPeer(p.id, p.name, true);
@@ -233,7 +251,7 @@ export class Room {
         const peer = this.peers.get(msg.id);
         // Only its server connection dropped: keep talking P2P; it will resume or time out.
         if (!peer || (msg.reason === 'disconnect' && peer.healthy)) break;
-        this.removePeer(msg.id);
+        this.peerGone(msg.id);
         this.chat.addSystem(`${peer.state.name} opuszcza pokój`);
         break;
       }
@@ -248,7 +266,7 @@ export class Room {
         break;
       }
       case 'relay':
-        this.onAppMessage(msg.from, msg.payload);
+        this.onAppMessage(msg.from, msg.payload, true);
         break;
       case 'mode': {
         this.pref = msg.pref;
@@ -330,8 +348,11 @@ export class Room {
     const peer: RemotePeer = new RemotePeer(id, name, initiator, this.iceServers, this.media, {
       signal: (sid, data) => this.signaling.send({ type: 'signal', to: id, sid, data }),
       track: () => this.refreshTile(id),
-      appMessage: (raw) => this.onAppMessage(id, raw),
-      appChannelOpen: () => peer.sendApp({ t: 'state', state: this.myState() } satisfies AppMessage),
+      appMessage: (raw) => this.onAppMessage(id, raw, false),
+      appChannelOpen: () => {
+        peer.sendApp({ t: 'state', state: this.myState() } satisfies AppMessage);
+        this.sendKey(peer);
+      },
       fileMessage: (e) => receiver.handle(e),
       connectionState: (s) => {
         if (s === 'connected') {
@@ -349,7 +370,7 @@ export class Room {
             if (this.online && this.present.has(id)) {
               tile.setStatus('Nie można nawiązać połączenia P2P (sieć może wymagać serwera TURN)');
             } else {
-              this.removePeer(id);
+              this.peerGone(id);
               this.chat.addSystem(`Utracono połączenie z: ${peer.state.name}`);
             }
           });
@@ -395,12 +416,21 @@ export class Room {
     for (const p of this.peers.values()) void p.setMaxBitrate(bps);
   }
 
-  private onAppMessage(from: string, raw: unknown): void {
+  /** `viaServer`: relayed by the signaling server (DataChannel not open yet) — never trusted with keys. */
+  private onAppMessage(from: string, raw: unknown, viaServer: boolean): void {
     const peer = this.peers.get(from);
     const msg = parseAppMessage(raw);
     if (!peer || !msg) return;
+    if (msg.t === 'e2ee-key' || msg.t === 'e2ee-key-request') {
+      if (viaServer || !this.e2ee || ignoreKeysForTests()) return;
+      if (msg.t === 'e2ee-key-request') return this.sendKey(peer);
+      this.e2ee.setPeerKey(from, msg);
+      this.grid.get(from)?.setStatus(null);
+      this.sfu?.requestKeyFrames(from);
+      return;
+    }
     if (msg.t === 'bye') {
-      this.removePeer(from);
+      this.peerGone(from);
       this.chat.addSystem(`${peer.state.name} opuszcza pokój`);
     } else if (msg.t === 'state') {
       if (msg.state.hand && !peer.state.hand) toast(`✋ ${msg.state.name} podnosi rękę`);
@@ -409,6 +439,31 @@ export class Room {
     } else if (msg.t === 'chat') {
       this.chat.addMessage(peer.state.name, msg.text, msg.ts, false);
     }
+  }
+
+  // --- End-to-end encryption (SFU) ----------------------------------------------
+
+  /** Our frame key to one participant — over the DataChannel only, never through the server. */
+  private sendKey(peer: RemotePeer): void {
+    if (this.e2ee) peer.sendApp({ t: 'e2ee-key', ...this.e2ee.localKey } satisfies AppMessage);
+  }
+
+  /** A participant really left (not just a refreshed connection): forget them and change our key. */
+  private peerGone(id: string): void {
+    this.removePeer(id);
+    this.codes.delete(id);
+    if (!this.e2ee) return;
+    this.e2ee.forgetPeer(id);
+    const key = this.e2ee.rotate();
+    for (const p of this.peers.values()) p.sendApp({ t: 'e2ee-key', ...key } satisfies AppMessage);
+  }
+
+  private onE2eeProblem(peerId: string, problem: 'missing-key' | 'decrypt-failed'): void {
+    const peer = this.peers.get(peerId);
+    if (!peer || this.mode !== 'sfu') return;
+    if (problem === 'missing-key' && !this.e2ee?.hasKey(peerId)) this.grid.get(peerId)?.setStatus('Czekam na klucz szyfrowania…');
+    // Lost a key (e.g. sent while our channel was reconnecting): ask for the current one.
+    peer.sendApp({ t: 'e2ee-key-request' } satisfies AppMessage);
   }
 
   /** Sends over DataChannels, falling back to the server relay for peers whose channel isn't open yet. */
@@ -457,7 +512,9 @@ export class Room {
         return;
       }
       if (this.mode !== 'sfu' || this.sfu || this.leaving) return; // superseded while loading
-      const session = new SfuSession((m, d) => this.signaling.request(m, d), this.media, this.iceServers, this.h264);
+      // The server never picks the SFU for a room with a client that can't encrypt — defensive anyway.
+      if (!this.e2ee) return void this.onSfuUnavailable();
+      const session = new SfuSession((m, d) => this.signaling.request(m, d), this.media, this.iceServers, this.e2ee, this.h264);
       this.sfu = session;
       session.on('change', (id) => this.refreshTile(id));
       session.on('failed', (err) => this.onSfuFailure(session, err));
@@ -475,6 +532,12 @@ export class Room {
       session?.close();
       for (const id of this.peers.keys()) this.refreshTile(id);
     }
+  }
+
+  private onSfuUnavailable(): void {
+    this.mode = 'mesh';
+    this.updateModeBadge();
+    if (this.online) this.signaling.send({ type: 'set-mode', pref: 'mesh' });
   }
 
   private onSfuFailure(session: SfuSession, err: Error): void {
@@ -500,7 +563,14 @@ export class Room {
     const badge = $('mode-badge');
     badge.textContent = this.mode === 'sfu' ? 'SFU' : 'P2P';
     badge.className = `mode-badge ${this.mode}`;
-    badge.title = this.mode === 'sfu' ? 'Media przez serwer SFU' : 'Media bezpośrednio między uczestnikami';
+    badge.title =
+      this.mode === 'sfu'
+        ? 'Media przez serwer SFU — szyfrowane end-to-end, serwer nie widzi obrazu ani nie słyszy dźwięku'
+        : 'Media bezpośrednio między uczestnikami — szyfrowane end-to-end przez WebRTC';
+    // In P2P WebRTC encrypts end to end by itself; in SFU mode our frame encryption does.
+    const lock = $('e2ee-badge');
+    lock.hidden = false;
+    lock.title = badge.title;
   }
 
   /** Tells the server how our uplink copes with the mesh, so it can move the room to the SFU. */
@@ -952,6 +1022,11 @@ export class Room {
         this.grid.get(p.id)?.setStats(stats);
       }),
     );
+    for (const p of this.peers.values()) {
+      if (!p.healthy) continue;
+      const code = await safetyCode(p.pc).catch(() => null);
+      if (code) this.codes.set(p.id, code);
+    }
     const report = await this.sfu?.sendStats().catch(() => null);
     this.sfuSend = report ? this.sfuMeter.sample(report) : null;
     this.updateEncoderBadge();
@@ -1011,10 +1086,17 @@ export class Room {
         h('td', { text: s ? `${s.lossPct.toFixed(1)}%` : '–' }),
         h('td', { text: s ? `${s.inKbps} kb/s` : '–' }),
         h('td', { text: this.mode === 'sfu' ? 'SFU' : s ? (s.relayed ? 'TURN' : 'P2P') : '–' }),
+        h('td', { class: 'code', text: this.codes.get(p.id) ?? '–' }),
       );
     });
-    const head = h('tr', {}, ...['Uczestnik', 'RTT', 'Straty', 'Odbiór', 'Trasa'].map((t) => h('th', { text: t })));
-    box.replaceChildren(h('table', {}, h('thead', {}, head), h('tbody', {}, ...rows)));
+    const head = h('tr', {}, ...['Uczestnik', 'RTT', 'Straty', 'Odbiór', 'Trasa', 'Kod'].map((t) => h('th', { text: t })));
+    box.replaceChildren(
+      h('table', {}, h('thead', {}, head), h('tbody', {}, ...rows)),
+      h('p', {
+        class: 'muted small',
+        text: 'Kod bezpieczeństwa: porównajcie go głosem — jeśli u Ciebie i u rozmówcy jest taki sam, nikt (także serwer) nie podsłuchuje połączenia ani nie przechwycił kluczy szyfrowania.',
+      }),
+    );
   }
 
   private updateClock(): void {
@@ -1037,6 +1119,7 @@ export class Room {
     this.timers.forEach(clearInterval);
     this.cleanups.forEach((fn) => fn());
     this.speaking.destroy();
+    this.e2ee?.close();
     this.media.stop();
     this.onLeave();
   }

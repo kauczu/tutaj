@@ -7,6 +7,8 @@ export interface Client {
   name: string;
   ws: WebSocket;
   roomId: string | null;
+  /** Can encrypt SFU media end to end (declared at join). */
+  e2ee?: boolean;
 }
 
 interface Room {

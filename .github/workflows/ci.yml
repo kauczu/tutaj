@@ -36,7 +36,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Server tests (signaling, mode policy, SFU with a real mediasoup worker)
+      - name: Unit tests (signaling, mode policy, SFU with a real mediasoup worker, frame encryption)
         run: npm test
 
       - name: Install Chromium for Playwright
@@ -75,7 +75,7 @@ jobs:
       - name: Build server
         run: npm run build -w @tutaj/server
 
-      - name: Server tests
+      - name: Server and client unit tests
         run: npm test
 
   docker:

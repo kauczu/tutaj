@@ -113,6 +113,8 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     if (!p) policies.set(roomId, (p = new ModePolicy(!!sfu)));
     return p;
   };
+  /** The SFU only carries end-to-end encrypted media: everyone in the room must support it. */
+  const allE2ee = (roomId: string) => rooms.members(roomId).every((c) => c.e2ee);
   const announceMode = (roomId: string, reason: ModeReason, by?: string) => {
     const p = policyFor(roomId);
     for (const c of rooms.members(roomId)) send(c.ws, { type: 'mode', mode: p.mode, pref: p.pref, reason, by });
@@ -196,7 +198,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         sfu?.closeRoom(roomId);
         return;
       }
-      const d = policyFor(roomId).participantsChanged(remaining.length, client.id);
+      const d = policyFor(roomId).participantsChanged(remaining.length, client.id, allE2ee(roomId));
       if (d) announceMode(roomId, d.reason);
     };
 
@@ -232,6 +234,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
           }
           client.id = msg.resume.id;
         }
+        client.e2ee = msg.e2ee === true;
         const creating = !rooms.has(msg.room);
         if (creating && !guard.canCreateRoom(ip, privileged)) {
           return sendError(ws, 'room-limit', 'Masz już otwartą maksymalną liczbę pokoi — zamknij któryś albo dołącz do istniejącego');
@@ -261,7 +264,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
           privileged,
         });
         for (const other of rooms.others(client)) send(other.ws, { type: 'peer-joined', peer: peerInfo(client) });
-        const d = policy.participantsChanged(result.peers.length + 1);
+        const d = policy.participantsChanged(result.peers.length + 1, undefined, allE2ee(msg.room));
         if (d) announceMode(msg.room, d.reason);
         return;
       }

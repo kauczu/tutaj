@@ -29,7 +29,7 @@ export type SignalData = { description: SessionDescription } | { candidate: IceC
 export type MediaMode = 'mesh' | 'sfu';
 /** What the room asked for; `auto` lets the server decide from quality reports. */
 export type ModePreference = 'auto' | 'mesh' | 'sfu';
-export type ModeReason = 'participants' | 'bandwidth' | 'cpu' | 'relay' | 'quality' | 'manual' | 'sfu-unavailable';
+export type ModeReason = 'participants' | 'bandwidth' | 'cpu' | 'relay' | 'quality' | 'manual' | 'sfu-unavailable' | 'e2ee';
 
 /** Periodic uplink health summary a client sends while in mesh mode. */
 export interface QualityReport {
@@ -54,6 +54,8 @@ export type SfuMethod =
   | 'producers'
   | 'consume'
   | 'resume-consumer'
+  /** Ask the sender of a consumed video for a key frame (after a new decryption key arrived). */
+  | 'request-keyframe'
   | 'leave';
 
 export interface SfuProducerInfo {
@@ -77,6 +79,8 @@ export type ClientMessage =
       resume?: { id: string; token: string };
       /** Owner key (server's OWNER_KEY): lifts per-IP limits and extends TURN credentials. */
       ownerKey?: string;
+      /** The client encrypts SFU media end to end. Rooms with someone who can't stay on P2P. */
+      e2ee?: boolean;
     }
   /** `sid` identifies the sender's RTCPeerConnection, so a fresh connection can be told apart from the old one. */
   | { type: 'signal'; to: string; sid: string; data: SignalData }

@@ -34,6 +34,7 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - **rozmowa przetrwa awarię serwera** – trwające połączenia P2P działają dalej, klient sam wraca i wznawia sesję
 - **hybryda P2P/SFU** – automatyczne przełączanie (lub ręczne: Ustawienia → Tryb mediów), simulcast, wskaźnik P2P/SFU na pasku
 - **nakładka na grę** (aplikacja desktopowa) – małe kamery współgraczy nad grą, skróty działające w grze
+- **szyfrowanie end-to-end także przez SFU** – serwer przekazuje obraz i dźwięk, których nie może odczytać; kody bezpieczeństwa
 - **profil jakości „Gra”** – dźwięk studyjny, kamera 1080p, sprzętowe kodowanie i limit wysyłania (zob. niżej)
 - **Pomoc** – skrócona instrukcja obsługi: Ustawienia → Pomoc, stopka lobby albo klawisz F1
 - PWA (instalowalna, działa offline jako „powłoka”), aplikacja desktopowa (Electron) z automatycznymi aktualizacjami
@@ -264,6 +265,33 @@ kamerą zajmuje tylko wąski pasek. Gdy Twój mikrofon jest wyciszony, nad kafel
   Każdy strumień jest dekodowany raz, niezależnie od liczby okien, które go wyświetlają; samo rysowanie obrazu w oknie
   rozmowy schowanym za grą to ok. 0,5% CPU (pomiar: 3 osoby).
 
+## Szyfrowanie end-to-end
+
+W trybie **P2P** media i kanały danych szyfruje sam WebRTC (DTLS-SRTP) – bezpośrednio między uczestnikami.
+W trybie **SFU** serwer przekazuje strumienie, więc Tutaj szyfruje dodatkowo **każdą zakodowaną klatkę** obrazu i dźwięku
+(WebRTC Encoded Transform, `RTCRtpScriptTransform`), zanim trafi do serwera:
+
+- każdy uczestnik losuje własny klucz AES-256-GCM i przekazuje go pozostałym **kanałem danych P2P** (DTLS, poza
+  serwerem); klucz nigdy nie idzie przez sygnalizację – wiadomości z kluczem przekazane przez serwer są ignorowane;
+- gdy ktoś wychodzi, pozostali zmieniają klucze (stary jeszcze przez chwilę odszyfrowuje klatki w drodze);
+- w klatce zostają jawne tylko bajty, których potrzebuje SFU: nagłówek VP8, nagłówki NAL H.264 do pierwszego wycinka
+  (reszta po zaszyfrowaniu jest „escapowana”, żeby nie powstał kod startu), bajt TOC Opusa – i one też są
+  uwierzytelniane (AAD), więc nie da się ich podmienić; każda klatka ma losowy IV;
+- odbiorca odrzuca każdą klatkę, której nie da się odszyfrować i uwierzytelnić – nic niezaszyfrowanego nie trafi do
+  dekodera;
+- **nic niezaszyfrowanego nie wyjdzie do serwera**: nadajnik startuje na wyłączonej kopii ścieżki, a prawdziwa kamera
+  i mikrofon idą dopiero, gdy worker potwierdzi, że klatki faktycznie przechodzą przez szyfrowanie. Chromium po cichu
+  pomija transformację przypisaną po negocjacji połączenia, dlatego Tutaj podpina ją wewnątrz negocjacji
+  mediasoup-client (`addTransceiver` / zdarzenie `track`) i to weryfikuje; gdy się nie da – pokój wraca do P2P;
+- klient bez obsługi szyfrowania (np. stara przeglądarka) trzyma pokój w P2P – serwer nie wybierze wtedy SFU.
+
+**Kod bezpieczeństwa** (Ustawienia → tabela połączeń): skrót obu odcisków certyfikatów DTLS danego połączenia P2P.
+Serwer sygnalizacji teoretycznie mógłby podstawić własne certyfikaty (atak „man in the middle”) – wtedy kody po obu
+stronach się różnią. Zgodny kod, porównany głosem, potwierdza, że klucze dotarły do właściwej osoby.
+
+Testy: `packages/client/test/frame.test.ts` (format klatki, ucieczka H.264, odrzucanie złych kluczy i zmian) oraz
+`e2e/tests/e2ee.spec.ts` (uczestnik bez kluczy nie widzi obrazu, rotacja, klient bez E2EE, kody, awaria szyfrowania).
+
 ## SFU: kiedy i jak
 
 Mesh jest optymalny dla 2 osób (i zwykle 3). Serwer (`policy.ts`) przełącza pokój na SFU w trybie **automatycznym**, gdy są ≥3 osoby i:
@@ -272,6 +300,7 @@ Mesh jest optymalny dla 2 osób (i zwykle 3). Serwer (`policy.ts`) przełącza p
   jest mniejszy niż (N−1) × 350 kb/s,
 - ktoś ma przeciążony procesor (`qualityLimitationReason = cpu`),
 - połączenia mesh idą przez TURN (SFU odciąża wtedy i klienta, i przekaźnik),
+- (warunek konieczny) wszyscy uczestnicy obsługują szyfrowanie end-to-end klatek – inaczej pokój zostaje w P2P,
 - ktoś wysyła w wysokiej jakości (profil „Gra”) – wtedy bez czekania.
 
 Raporty jakości klienci wysyłają co 5 s (tylko w trybie mesh, po 10 s „rozgrzewki” połączeń). Na SFU pokój zostaje, dopóki są
