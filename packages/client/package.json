@@ -1,6 +1,6 @@
 {
   "name": "@tutaj/client",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "test": "node --import tsx --test \"test/*.test.ts\""
   },
   "devDependencies": {
-    "@tutaj/shared": "0.7.1",
+    "@tutaj/shared": "0.7.2",
     "vite": "7.3.6"
   },
   "dependencies": {
