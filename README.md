@@ -22,6 +22,17 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 | **Własny serwer** | VPS + domena (Docker) | rozmowy przez internet, z TURN dla trudnych sieci |
 | **Dev** | Node.js 22+ | rozwój |
 
+### Instalacja aplikacji na Windows
+
+1. Pobierz `Tutaj-Setup-<wersja>.exe` z [najnowszego wydania](https://github.com/kauczu/tutaj/releases/latest).
+2. Uruchom instalator. Windows pokaże niebieskie okno **„System Windows ochronił ten komputer”** – instalator
+   nie jest podpisany certyfikatem (patrz niżej), więc SmartScreen go nie zna.
+3. Kliknij **„Więcej informacji”**, a potem **„Uruchom mimo to”**.
+4. Instalator nie wymaga uprawnień administratora; aplikacja instaluje się dla bieżącego użytkownika.
+
+To ostrzeżenie pojawia się tylko przy pierwszej instalacji. Kolejne wersje aplikacja pobiera i instaluje sama
+(po potwierdzeniu), bez ostrzeżeń.
+
 ## Funkcje
 
 - wideo + audio w siatce do 4 osób, wskaźnik mówiącego, przypinanie kafelka, pełny ekran (dwuklik)
@@ -131,7 +142,12 @@ Wydanie na GitHubie: wypchnięcie tagu (`git tag v0.1.0 && git push origin v0.1.
 instalator tylko jako artefakt.
 
 Instalator nie jest podpisany – Windows SmartScreen przy pierwszym uruchomieniu pokaże ostrzeżenie
-(„Więcej informacji” → „Uruchom mimo to”). Usunie je dopiero certyfikat do podpisywania kodu.
+(„Więcej informacji” → „Uruchom mimo to”, zob. [Instalacja aplikacji na Windows](#instalacja-aplikacji-na-windows)).
+Autoaktualizacje go nie wywołują. Certyfikat nie usunąłby go od razu: SmartScreen ufa podpisanym plikom dopiero
+po zebraniu „reputacji” (liczby instalacji), także w przypadku certyfikatów EV. Dlatego projekt na razie go nie
+używa; najrozsądniejszą opcją dla osoby prywatnej w Polsce jest Certum Open Source Code Signing (podpis w chmurze
+SimplySign; jako wydawca widnieje imię i nazwisko). Po włączeniu podpisu trzeba podpisywać każde kolejne wydanie,
+bo aktualizator sprawdza wtedy wydawcę.
 
 ### Aktualizacje aplikacji desktopowej
 
