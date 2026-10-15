@@ -139,7 +139,13 @@ a { color: var(--accent-bright); }
   overflow: hidden; border: 1px solid var(--border);
 }
 .preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-.preview-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+.preview-placeholder {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 0 24px 56px; text-align: center; color: var(--muted);
+}
+.preview-toggle { padding: 4px 12px; font-size: 13px; background: rgba(4, 11, 28, 0.7); }
+/* While previewing it sits in the corner, over the picture. */
+.preview > .preview-toggle { position: absolute; top: 20px; right: 12px; }
 .preview-controls { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: center; gap: 12px; }
 .preview-controls .round { background: rgba(4, 11, 28, 0.7); }
 .preview-controls .round.off { background: var(--danger); }

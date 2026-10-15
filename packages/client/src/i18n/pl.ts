@@ -5,6 +5,9 @@ export const pl = {
   // --- Lobby ---
   'lobby.tagline': 'Spójna platforma komunikacyjna.',
   'lobby.cameraOff': 'Kamera wyłączona',
+  'lobby.previewIdle': 'Kamera i mikrofon włączą się dopiero po dołączeniu do rozmowy.',
+  'lobby.previewStart': 'Włącz podgląd',
+  'lobby.previewStop': 'Wyłącz podgląd',
   'lobby.mic': 'Mikrofon',
   'lobby.camera': 'Kamera',
   'lobby.name': 'Twoje imię',
@@ -25,6 +28,7 @@ export const pl = {
   'lobby.joinRoom': 'Dołącz do „{room}”',
   'lobby.joining': 'Łączenie…',
   'lobby.canJoinWithout': '{problems}. Możesz dołączyć bez nich.',
+  'lobby.joinedWithout': '{problems}. Jesteś w rozmowie bez nich.',
   'lobby.badNameRoom': 'Podaj imię i nazwę pokoju (litery, cyfry, - i _).',
   'lobby.badServer': 'Nieprawidłowy adres serwera.',
   'lobby.help': 'Pomoc',

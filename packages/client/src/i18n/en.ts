@@ -5,6 +5,9 @@ export const en: Record<Key, string> = {
   // --- Lobby ---
   'lobby.tagline': 'A coherent communication platform.',
   'lobby.cameraOff': 'Camera off',
+  'lobby.previewIdle': 'The camera and microphone turn on only when you join the call.',
+  'lobby.previewStart': 'Start preview',
+  'lobby.previewStop': 'Stop preview',
   'lobby.mic': 'Microphone',
   'lobby.camera': 'Camera',
   'lobby.name': 'Your name',
@@ -25,6 +28,7 @@ export const en: Record<Key, string> = {
   'lobby.joinRoom': 'Join “{room}”',
   'lobby.joining': 'Connecting…',
   'lobby.canJoinWithout': '{problems}. You can join without them.',
+  'lobby.joinedWithout': '{problems}. You are in the call without them.',
   'lobby.badNameRoom': 'Enter your name and a room name (letters, digits, - and _).',
   'lobby.badServer': 'Invalid server address.',
   'lobby.help': 'Help',

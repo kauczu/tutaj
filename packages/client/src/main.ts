@@ -10,6 +10,7 @@ import type { OverlaySettings } from './ui/overlay';
 import { showHelp } from './ui/help';
 import { renderQualityForm } from './ui/quality-form';
 import { setIcon } from './ui/icons';
+import { toast } from './ui/toast';
 
 /** Exposed by the Electron preload when running as the desktop app. */
 interface DesktopInfo {
@@ -102,6 +103,60 @@ const meter = $('preview-meter').firstElementChild as HTMLElement;
 
 let detector: SpeakingDetector | null = null;
 
+/**
+ * The lobby captures nothing by itself: the camera and microphone open when you join (or for the
+ * preview you turn on), and close when you hang up — no hidden capture draining a phone's battery.
+ * The buttons under the preview are what you join with, remembered between visits.
+ */
+const joinWith = { mic: store.get('joinMic') !== 'off', cam: store.get('joinCam') !== 'off' };
+media.setAudioEnabled(joinWith.mic);
+let previewing = false;
+/** The preview was stopped because the tab went to the background; it comes back with the tab. */
+let resumePreview = false;
+let joining = false;
+
+function rememberJoinWith(): void {
+  store.set('joinMic', joinWith.mic ? 'on' : 'off');
+  store.set('joinCam', joinWith.cam ? 'on' : 'off');
+}
+
+function startMeter(): void {
+  if (detector) return;
+  try {
+    detector = new SpeakingDetector((_id, _speaking, level) => {
+      meter.style.width = `${Math.min(100, level * 400)}%`;
+    });
+  } catch {
+    /* no WebAudio */
+  }
+}
+
+function stopMeter(): void {
+  detector?.destroy();
+  detector = null;
+  meter.style.width = '0';
+}
+
+async function startPreview(): Promise<void> {
+  if (previewing) return;
+  previewing = true;
+  refreshPreview();
+  const problems = await media.start(true, joinWith.cam);
+  if (!previewing) return media.stop(); // stopped while the browser was asking
+  if (problems.length) showError(t('lobby.canJoinWithout', { problems: problems.join('. ') }));
+  startMeter();
+  refreshPreview();
+  await refreshDevices(); // labels are only available after permission is granted
+}
+
+function stopPreview(): void {
+  if (!previewing) return;
+  previewing = false;
+  stopMeter();
+  media.stop();
+  refreshPreview();
+}
+
 function showError(msg: string | null): void {
   errorEl.textContent = msg ?? '';
   errorEl.hidden = !msg;
@@ -110,11 +165,25 @@ function showError(msg: string | null): void {
 function refreshPreview(): void {
   const stream = media.previewStream();
   previewVideo.srcObject = stream.getVideoTracks().length ? stream : null;
-  $('preview-placeholder').hidden = media.cameraOn;
-  setIcon(micBtn, media.audioEnabled && media.audioTrack ? 'mic' : 'micOff');
-  setIcon(camBtn, media.cameraOn ? 'cam' : 'camOff');
-  micBtn.classList.toggle('off', !(media.audioEnabled && media.audioTrack));
-  camBtn.classList.toggle('off', !media.cameraOn);
+  const placeholder = $('preview-placeholder');
+  placeholder.hidden = previewing && media.cameraOn;
+  $('preview-note').textContent = previewing ? t('lobby.cameraOff') : t('lobby.previewIdle');
+  const toggle = $<HTMLButtonElement>('preview-toggle');
+  // Under the note before the preview; in the corner over the picture while it runs.
+  if (previewing) placeholder.parentElement!.append(toggle);
+  else placeholder.append(toggle);
+  toggle.textContent = previewing ? t('lobby.previewStop') : t('lobby.previewStart');
+  toggle.disabled = joining;
+  $('preview-meter').hidden = !previewing;
+  // In the preview the buttons show what is live; before it, what you will join with.
+  const micOn = previewing && media.audioTrack ? media.audioEnabled : joinWith.mic;
+  const camOn = previewing ? media.cameraOn : joinWith.cam;
+  setIcon(micBtn, micOn ? 'mic' : 'micOff');
+  setIcon(camBtn, camOn ? 'cam' : 'camOff');
+  micBtn.classList.toggle('off', !micOn);
+  camBtn.classList.toggle('off', !camOn);
+  micBtn.setAttribute('aria-pressed', String(micOn));
+  camBtn.setAttribute('aria-pressed', String(camOn));
   detector?.watch('preview', media.audioTrack);
 }
 
@@ -153,29 +222,56 @@ async function initLobby(): Promise<void> {
   media.on('change', refreshPreview);
 
   micBtn.addEventListener('click', async () => {
-    if (!media.audioTrack) {
+    joinWith.mic = !joinWith.mic;
+    rememberJoinWith();
+    if (previewing && !media.audioTrack && joinWith.mic) {
       try {
         await media.setMicrophone(media.audioDeviceId);
       } catch (e) {
-        return showError(t('media.micProblem', { error: describeMediaError(e) }));
+        showError(t('media.micProblem', { error: describeMediaError(e) }));
       }
-    } else media.setAudioEnabled(!media.audioEnabled);
+    }
+    media.setAudioEnabled(joinWith.mic);
     refreshPreview();
   });
   camBtn.addEventListener('click', async () => {
-    try {
-      await media.setCamera(!media.cameraOn);
-    } catch (e) {
-      showError(t('media.cameraProblem', { error: describeMediaError(e) }));
+    joinWith.cam = !joinWith.cam;
+    rememberJoinWith();
+    if (previewing) {
+      try {
+        await media.setCamera(joinWith.cam);
+      } catch (e) {
+        showError(t('media.cameraProblem', { error: describeMediaError(e) }));
+      }
+    }
+    refreshPreview();
+  });
+  $('preview-toggle').addEventListener('click', () => {
+    showError(null);
+    if (previewing) stopPreview();
+    else void startPreview();
+  });
+  // A preview left running in a background tab (or a phone's browser) would keep the camera and
+  // microphone busy and drain the battery: stop it there, bring it back with the tab.
+  document.addEventListener('visibilitychange', () => {
+    if (joining) return; // in the call (or joining) the room owns the devices
+    if (document.visibilityState === 'hidden' && previewing) {
+      resumePreview = true;
+      stopPreview();
+    } else if (document.visibilityState === 'visible' && resumePreview) {
+      resumePreview = false;
+      void startPreview();
     }
   });
   audioSelect.addEventListener('change', () => {
     store.set('audioDevice', audioSelect.value);
-    media.setMicrophone(audioSelect.value).catch((e) => showError(describeMediaError(e)));
+    media.audioDeviceId = audioSelect.value;
+    if (media.audioTrack) media.setMicrophone(audioSelect.value).catch((e) => showError(describeMediaError(e)));
   });
   videoSelect.addEventListener('change', () => {
     store.set('videoDevice', videoSelect.value);
-    media.setCamera(true, videoSelect.value).catch((e) => showError(describeMediaError(e)));
+    media.videoDeviceId = videoSelect.value;
+    if (media.cameraOn) media.setCamera(true, videoSelect.value).catch((e) => showError(describeMediaError(e)));
   });
   navigator.mediaDevices?.addEventListener?.('devicechange', () => void refreshDevices());
 
@@ -186,17 +282,8 @@ async function initLobby(): Promise<void> {
 
   void showDesktopInfo();
 
-  const problems = await media.start(true, true);
-  if (problems.length) showError(t('lobby.canJoinWithout', { problems: problems.join('. ') }));
-  try {
-    detector = new SpeakingDetector((_id, _speaking, level) => {
-      meter.style.width = `${Math.min(100, level * 400)}%`;
-    });
-  } catch {
-    /* no WebAudio */
-  }
   refreshPreview();
-  await refreshDevices(); // labels are only available after permission is granted
+  await refreshDevices(); // with a permission granted earlier the names show without capturing
 }
 
 function link(text: string, href: string): HTMLAnchorElement {
@@ -378,9 +465,16 @@ async function join(): Promise<void> {
 
   joinBtn.disabled = true;
   joinBtn.textContent = t('lobby.joining');
+  joining = true;
+  resumePreview = false;
+  const wasPreviewing = previewing;
+  refreshPreview();
   try {
-    detector?.destroy();
-    detector = null;
+    stopMeter();
+    // Open what you join with; the mic opens muted too, so unmuting in the call is instant.
+    const problems = await media.start(!media.audioTrack, joinWith.cam && !media.cameraOn);
+    if (!joinWith.cam) await media.setCamera(false);
+    media.setAudioEnabled(joinWith.mic);
     await Room.join(
       {
         roomId,
@@ -395,6 +489,8 @@ async function join(): Promise<void> {
         location.reload();
       },
     );
+    previewing = false;
+    if (problems.length) toast(t('lobby.joinedWithout', { problems: problems.join('. ') }), 'error', 8000);
     const u = new URL(location.href);
     u.searchParams.set('room', roomId);
     history.replaceState(null, '', u);
@@ -403,12 +499,11 @@ async function join(): Promise<void> {
     showError(err instanceof Error ? err.message : String(err));
     joinBtn.disabled = false;
     joinBtn.textContent = t('lobby.join');
-    try {
-      detector = new SpeakingDetector((_id, _s, level) => (meter.style.width = `${Math.min(100, level * 400)}%`));
-      detector.watch('preview', media.audioTrack);
-    } catch {
-      /* ignore */
-    }
+    joining = false;
+    // Back in the lobby: release the devices unless the preview was on.
+    if (wasPreviewing) startMeter();
+    else media.stop();
+    refreshPreview();
   }
 }
 

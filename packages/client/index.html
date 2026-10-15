@@ -26,7 +26,10 @@
 
         <div class="preview">
           <video id="preview-video" autoplay playsinline muted></video>
-          <div id="preview-placeholder" class="preview-placeholder" data-i18n="lobby.cameraOff">Kamera wyłączona</div>
+          <div id="preview-placeholder" class="preview-placeholder">
+            <span id="preview-note"></span>
+            <button id="preview-toggle" class="ghost preview-toggle" type="button"></button>
+          </div>
           <div class="preview-controls">
             <button id="preview-mic" class="round" type="button" aria-pressed="true" title="Mikrofon" data-i18n-title="lobby.mic"></button>
             <button id="preview-cam" class="round" type="button" aria-pressed="true" title="Kamera" data-i18n-title="lobby.camera"></button>

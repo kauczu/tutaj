@@ -29,7 +29,7 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
         ['Wpisz ', b('imię'), ' i ', b('nazwę pokoju'), ', kliknij ', b('Dołącz'), '. Imię i ostatni pokój są zapamiętywane.'],
         ['W pokoju ', b('Kopiuj zaproszenie'), ' daje link do wysłania innym — kto go otworzy, trafi do tego pokoju.'],
         ['W pokoju mogą być ', b('maks. 4 osoby'), '. Hasło pokoju ustala pierwsza osoba (lobby → „Urządzenia, jakość i ustawienia zaawansowane”).'],
-        ['Przed dołączeniem możesz wyłączyć mikrofon lub kamerę przyciskami pod podglądem. Język interfejsu zmienisz w ustawieniach zaawansowanych.'],
+        ['Kamera i mikrofon włączają się dopiero po dołączeniu i wyłączają po rozłączeniu. Przyciski pod podglądem wybierają, z czym dołączysz (wybór jest zapamiętywany); „Włącz podgląd” pozwala wcześniej sprawdzić obraz i dźwięk — wyłącza się sam, gdy przejdziesz do innej karty. Język interfejsu zmienisz w ustawieniach zaawansowanych.'],
       ),
     ),
     section(
@@ -122,7 +122,7 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
         ['Enter your ', b('name'), ' and a ', b('room name'), ', click ', b('Join'), '. Your name and the last room are remembered.'],
         ['In the room, ', b('Copy invitation'), ' gives you a link to send — whoever opens it lands in the same room.'],
         ['A room holds ', b('up to 4 people'), '. The first person sets the room password (lobby → “Devices, quality and advanced settings”).'],
-        ['Before joining you can turn the microphone or camera off with the buttons under the preview. The interface language is in the advanced settings.'],
+        ['The camera and microphone turn on only when you join and off when you hang up. The buttons under the preview choose what you join with (the choice is remembered); “Start preview” lets you check picture and sound first — it stops by itself when you switch to another tab. The interface language is in the advanced settings.'],
       ),
     ),
     section(
