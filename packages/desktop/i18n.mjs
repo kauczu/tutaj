@@ -30,7 +30,8 @@ const dict = {
     'update.title': 'Aktualizacja Tutaj',
     'update.available': 'Dostępna jest nowa wersja Tutaj: {version}',
     'update.availableDetail':
-      'Masz wersję {current}. Aktualizacja pobierze się teraz (postęp w osobnym okienku), a potem aplikacja zainstaluje ją i uruchomi się ponownie.\n\nCo nowego: github.com/kauczu/tutaj/releases',
+      'Masz wersję {current}. Aktualizacja pobierze się teraz (postęp w osobnym okienku), a potem aplikacja zainstaluje ją i uruchomi się ponownie.',
+    'update.whatsNew': 'Co nowego?',
     'update.now': 'Aktualizuj',
     'update.later': 'Później',
     'update.skip': 'Pomiń tę wersję',
@@ -69,7 +70,8 @@ const dict = {
     'update.title': 'Tutaj update',
     'update.available': 'A new version of Tutaj is available: {version}',
     'update.availableDetail':
-      'You have version {current}. The update downloads now (progress in a small window), then the app installs it and restarts.\n\nWhat’s new: github.com/kauczu/tutaj/releases',
+      'You have version {current}. The update downloads now (progress in a small window), then the app installs it and restarts.',
+    'update.whatsNew': 'What’s new?',
     'update.now': 'Update',
     'update.later': 'Later',
     'update.skip': 'Skip this version',

@@ -3,7 +3,7 @@
 // At start (and from the menu) the app checks the latest release. A newer version is offered in a
 // dialog; on "yes" it downloads with a progress window (and progress on the taskbar icon), then
 // installs silently and restarts — right away, or after the call if one is in progress.
-import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,7 @@ import { t, uiLang } from './i18n.mjs';
 
 const { autoUpdater, CancellationToken } = updater;
 const here = dirname(fileURLToPath(import.meta.url));
+const RELEASES = 'https://github.com/kauczu/tutaj/releases';
 
 /**
  * @param {object} ctx
@@ -65,13 +66,19 @@ export function initUpdater(ctx) {
 
   autoUpdater.on('update-available', async (info) => {
     if (!manual && ctx.skipped() === info.version) return;
-    const choice = await ask({
-      message: t('update.available', { version: info.version }),
-      detail: t('update.availableDetail', { current: app.getVersion() }),
-      buttons: [t('update.now'), t('update.later'), t('update.skip')],
-      defaultId: 0,
-      cancelId: 1,
-    });
+    let choice;
+    for (;;) {
+      choice = await ask({
+        message: t('update.available', { version: info.version }),
+        detail: t('update.availableDetail', { current: app.getVersion() }),
+        buttons: [t('update.now'), t('update.later'), t('update.skip'), t('update.whatsNew')],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (choice !== 3) break;
+      // The release notes in the browser; the question comes back.
+      void shell.openExternal(`${RELEASES}/tag/v${info.version}`);
+    }
     if (choice === 2) ctx.skip(info.version);
     if (choice !== 0) return;
     ctx.skip(null);
