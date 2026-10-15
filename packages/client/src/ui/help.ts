@@ -67,7 +67,7 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
       'Jakość obrazu i dźwięku',
       list(
         ['Ustawienia → Jakość → ', b('Profil jakości'), ': „Rozmowa” (domyślny) albo „Gra” — dźwięk studyjny, kamera 1080p, limit wysyłania 4 Mb/s.'],
-        [b('Dźwięk studyjny'), ' wyłącza redukcję echa — używaj słuchawek, inaczej rozmówcy usłyszą siebie.'],
+        [b('Dźwięk studyjny'), ' jest bez redukcji echa i szumów — najlepiej na słuchawkach. Grasz na głośnikach? Zaznacz „Usuwanie echa”: zostaje stereo i bez innych filtrów, a rozmówcy nie usłyszą siebie (dźwięk gry z głośników nadal mogą słyszeć).'],
         ['Znacznik ', b('GPU'), ' / ', b('CPU'), ' na pasku: czy obraz koduje karta graficzna (lepiej podczas gry), czy procesor.'],
         [b('P2P'), ' — obraz płynie bezpośrednio między uczestnikami; ', b('SFU'), ' — przez serwer (przy 3–4 osobach lub słabym łączu). Przełącza się samo; można wybrać ręcznie w Ustawieniach → Połączenie.'],
       ),
@@ -104,7 +104,7 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
       list(
         [b('Brak obrazu z kamery / „urządzenie zajęte”'), ' — zamknij inne programy, które jej używają (Teams, Discord, OBS).'],
         [b('Brak dostępu do kamery lub mikrofonu'), ' — Windows: Ustawienia → Prywatność i zabezpieczenia → Kamera / Mikrofon (zezwól aplikacjom).'],
-        [b('Rozmówcy słyszą echo'), ' — załóż słuchawki albo wybierz dźwięk „Rozmowa” w Ustawieniach → Jakość.'],
+        [b('Rozmówcy słyszą echo'), ' — załóż słuchawki, zaznacz „Usuwanie echa” albo wybierz dźwięk „Rozmowa” w Ustawieniach → Jakość.'],
         [b('Ktoś się nie łączy'), ' — sprawdź kropkę jakości i tabelę w Ustawieniach → Połączenie; w sieciach firmowych połączenie idzie przez serwer TURN i może trwać dłużej.'],
         ...(desktop
           ? [[b('Aplikacja'), ': klawisz ', kbd('Alt'), ' pokazuje menu — zmiana serwera, tryb sieci lokalnej (bez internetu), sprawdzenie aktualizacji.'] as Block[]]
@@ -160,7 +160,7 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
       'Video and audio quality',
       list(
         ['Settings → Quality → ', b('Quality profile'), ': “Call” (default) or “Game” — studio audio, 1080p camera, 4 Mb/s upload limit.'],
-        [b('Studio audio'), ' turns echo cancellation off — use headphones, or the others will hear themselves.'],
+        [b('Studio audio'), ' has no echo cancellation or noise suppression — best with headphones. Playing on speakers? Tick “Echo cancellation”: it stays stereo with no other filters, and the others won’t hear themselves (they may still hear your game from the speakers).'],
         ['The ', b('GPU'), ' / ', b('CPU'), ' badge on the bar: whether the graphics card encodes your video (better while gaming) or the processor.'],
         [b('P2P'), ' — video goes directly between participants; ', b('SFU'), ' — via the server (with 3–4 people or a slow connection). It switches by itself; you can choose by hand in Settings → Connection.'],
       ),
@@ -197,7 +197,7 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
       list(
         [b('No camera picture / “device in use”'), ' — close other programs that use it (Teams, Discord, OBS).'],
         [b('No access to the camera or microphone'), ' — Windows: Settings → Privacy & security → Camera / Microphone (allow apps).'],
-        [b('Others hear an echo'), ' — put on headphones or choose “Call” audio in Settings → Quality.'],
+        [b('Others hear an echo'), ' — put on headphones, tick “Echo cancellation” or choose “Call” audio in Settings → Quality.'],
         [b('Someone cannot connect'), ' — check the quality dot and the table in Settings → Connection; on company networks the connection goes through a TURN server and may take longer.'],
         ...(desktop
           ? [[b('App'), ': the ', kbd('Alt'), ' key shows the menu — change server, local network mode (no internet), check for updates.'] as Block[]]

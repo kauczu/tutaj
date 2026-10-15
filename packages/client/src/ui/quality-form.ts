@@ -1,6 +1,6 @@
 import type { LocalMedia } from '../media';
 import { describeMediaError } from '../media';
-import { PROFILES, UPLOAD_LIMITS, hasHardwareH264, profileOf, type ProfileId, type QualitySettings } from '../quality';
+import { PROFILES, UPLOAD_LIMITS, hasHardwareH264, profileOf, withProfile, type ProfileId, type QualitySettings } from '../quality';
 import { h } from './dom';
 import { locale, t } from '../i18n';
 
@@ -32,6 +32,10 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
   const codec = h('select');
   codec.id = `${container.id}-codec`;
   const hint = h('p', { class: 'muted small quality-hint' });
+  const echo = h('input');
+  echo.type = 'checkbox';
+  echo.id = `${container.id}-echo`;
+  const echoLabel = h('label', { class: 'check' }, echo, t('q.echo'));
 
   const fill = (s: QualitySettings) => {
     const current = profileOf(s);
@@ -50,8 +54,10 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
       option('h264', 'H.264', s.codec === 'h264'),
       option('vp8', t('q.codec.vp8'), s.codec === 'vp8'),
     );
+    echo.checked = s.echoCancel;
+    echoLabel.hidden = s.audio !== 'studio';
     const notes: string[] = [];
-    if (s.audio === 'studio') notes.push(t('q.studioHint'));
+    if (s.audio === 'studio') notes.push(t(s.echoCancel ? 'q.studioEchoHint' : 'q.studioHint'));
     if (s.uploadKbps) notes.push(t('q.uploadHint', { rate: mbps(s.uploadKbps) }));
     hint.textContent = notes.join(' ');
   };
@@ -62,15 +68,16 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
   };
 
   profile.onchange = () => {
-    if (profile.value in PROFILES) apply({ ...PROFILES[profile.value as ProfileId].settings });
+    if (profile.value in PROFILES) apply(withProfile(profile.value as ProfileId, read()));
   };
   const read = (): QualitySettings => ({
     audio: audio.value === 'studio' ? 'studio' : 'voice',
     resolution: resolution.value === '1080' ? 1080 : 720,
     uploadKbps: Number(upload.value),
     codec: codec.value === 'h264' || codec.value === 'vp8' ? codec.value : 'auto',
+    echoCancel: echo.checked,
   });
-  for (const el of [audio, resolution, upload, codec]) el.onchange = () => apply(read());
+  for (const el of [audio, resolution, upload, codec, echo]) el.onchange = () => apply(read());
 
   const encoder = h('p', { class: 'muted small' });
   const checkEncoder = async () => {
@@ -95,6 +102,7 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
   container.replaceChildren(
     field(t('q.profile'), profile),
     field(t('q.audio'), audio),
+    echoLabel,
     field(t('q.video'), resolution),
     field(t('q.upload'), upload),
     field(t('q.codec'), codec),

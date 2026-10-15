@@ -1,5 +1,5 @@
 import { Emitter } from './emitter';
-import { AUDIO_BITRATE, loadQuality, saveQuality, type QualitySettings } from './quality';
+import { AUDIO_BITRATE, loadQuality, micChanged, saveQuality, type QualitySettings } from './quality';
 import { t } from './i18n';
 
 type MediaEvents = {
@@ -7,10 +7,19 @@ type MediaEvents = {
   change: void;
 };
 
-/** Voice: browser processing on. Studio: raw stereo signal — needs headphones (no echo cancellation). */
+/**
+ * Voice: browser processing on. Studio: raw stereo signal — for headphones; with `echoCancel` the
+ * browser removes the call's own sound coming back from speakers, nothing else (still stereo).
+ */
 function audioConstraints(q: QualitySettings): MediaTrackConstraints {
   return q.audio === 'studio'
-    ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } }
+    ? {
+        echoCancellation: q.echoCancel,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: { ideal: 2 },
+        sampleRate: { ideal: 48000 },
+      }
     : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
 }
 
@@ -59,7 +68,7 @@ export class LocalMedia extends Emitter<MediaEvents> {
     const prev = this.quality;
     this.quality = q;
     saveQuality(q);
-    if (this.audioTrack && prev.audio !== q.audio) await this.setMicrophone(this.audioDeviceId);
+    if (this.audioTrack && micChanged(prev, q)) await this.setMicrophone(this.audioDeviceId);
     if (this.cameraTrack && prev.resolution !== q.resolution) await this.setCamera(true);
     this.emit('change', undefined);
   }

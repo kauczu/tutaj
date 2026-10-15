@@ -111,6 +111,26 @@ test('gaming profile over P2P: studio stereo audio with redundancy, 1080p captur
   await bartek.page.click('#tab-connection');
   await expect(bartek.page.locator('#send-stats')).toContainText('stereo');
   await expect.poll(async () => (await mediaInfo(bartek.page))[0]).toMatchObject({ audioMax: 160_000, echoCancellation: false, captureHeight: 1080 });
+
+  // Speakers instead of headphones: echo cancellation alone — still studio (stereo, 160 kb/s, no other
+  // processing), still the "Gra" profile; the mic is swapped mid-call.
+  await bartek.page.click('#tab-quality');
+  await bartek.page.check('#quality-room-echo');
+  await expect(bartek.page.locator('#quality-room-profile')).toHaveValue('game');
+  await expect(bartek.page.locator('#quality-room .quality-hint')).toContainText('Usuwanie echa');
+  await expect.poll(async () => (await mediaInfo(bartek.page))[0]).toMatchObject({ audioMax: 160_000, echoCancellation: true });
+  const mic = await bartek.page.evaluate(() => {
+    const track = window.__pcs.flatMap((pc) => pc.getSenders()).find((s) => s.track?.kind === 'audio')!.track!;
+    const s = track.getSettings();
+    return { channels: s.channelCount, ns: s.noiseSuppression, agc: s.autoGainControl, live: track.readyState };
+  });
+  expect(mic).toEqual({ channels: 2, ns: false, agc: false, live: 'live' });
+  // Remembered, and kept across profiles; only studio audio shows it.
+  expect(await bartek.page.evaluate(() => JSON.parse(localStorage.getItem('tutaj:quality')!).echoCancel)).toBe(true);
+  await bartek.page.selectOption('#quality-room-profile', 'call');
+  await expect(bartek.page.locator('#quality-room-echo')).toBeHidden();
+  await bartek.page.selectOption('#quality-room-profile', 'game');
+  await expect(bartek.page.locator('#quality-room-echo')).toBeChecked();
   await bartek.page.getByRole('button', { name: 'Zamknij' }).click();
   await ania.expectVideoFrom('Bartek');
 });

@@ -10,13 +10,19 @@ export interface QualitySettings {
   /** Total upload limit for the call, kb/s; 0 = no limit (bandwidth estimation decides). */
   uploadKbps: number;
   codec: CodecPref;
+  /**
+   * Studio audio only: echo cancellation without the rest of the voice processing (still stereo,
+   * no noise suppression or gain control) — for speakers instead of headphones. Voice always has it.
+   * A property of your setup, not of a profile: profiles keep it as it is.
+   */
+  echoCancel: boolean;
 }
 
 export type ProfileId = 'call' | 'game';
 
 export const PROFILES: Record<ProfileId, { settings: QualitySettings }> = {
-  call: { settings: { audio: 'voice', resolution: 720, uploadKbps: 0, codec: 'auto' } },
-  game: { settings: { audio: 'studio', resolution: 1080, uploadKbps: 4000, codec: 'auto' } },
+  call: { settings: { audio: 'voice', resolution: 720, uploadKbps: 0, codec: 'auto', echoCancel: false } },
+  game: { settings: { audio: 'studio', resolution: 1080, uploadKbps: 4000, codec: 'auto', echoCancel: false } },
 };
 
 export const UPLOAD_LIMITS = [0, 1500, 3000, 4000, 6000, 10000];
@@ -40,6 +46,7 @@ export function loadQuality(): QualitySettings {
       if (raw.resolution === 720 || raw.resolution === 1080) base.resolution = raw.resolution;
       if (UPLOAD_LIMITS.includes(raw.uploadKbps)) base.uploadKbps = raw.uploadKbps;
       if (raw.codec === 'auto' || raw.codec === 'h264' || raw.codec === 'vp8') base.codec = raw.codec;
+      if (typeof raw.echoCancel === 'boolean') base.echoCancel = raw.echoCancel;
     }
   } catch {
     /* defaults */
@@ -62,6 +69,16 @@ export function profileOf(q: QualitySettings): ProfileId | null {
   }
   return null;
 }
+
+/** A profile's settings, keeping what belongs to your setup rather than to the profile. */
+export const withProfile = (id: ProfileId, current: QualitySettings): QualitySettings => ({
+  ...PROFILES[id].settings,
+  echoCancel: current.echoCancel,
+});
+
+/** Whether the microphone has to be re-opened to apply new settings. */
+export const micChanged = (a: QualitySettings, b: QualitySettings): boolean =>
+  a.audio !== b.audio || (b.audio === 'studio' && a.echoCancel !== b.echoCancel);
 
 /** High-quality settings make 3+ person rooms go through the SFU right away. */
 export const isHighQuality = (q: QualitySettings): boolean => q.audio === 'studio' || q.resolution === 1080;
