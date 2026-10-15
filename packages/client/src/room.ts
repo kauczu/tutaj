@@ -17,6 +17,7 @@ import { setIcon } from './ui/icons';
 import { acceleratorFromEvent, formatAccelerator, type HotkeyName } from './ui/hotkeys';
 import { GameOverlay, type OverlaySettings } from './ui/overlay';
 import { PipWindow } from './ui/pip';
+import { settingsTabs } from './ui/settings-tabs';
 import { renderQualityForm } from './ui/quality-form';
 import { REACTIONS, type Reaction } from './ui/reactions';
 import { toast } from './ui/toast';
@@ -945,6 +946,7 @@ export class Room {
     const bridge = window.tutaj;
     const current = await bridge?.overlay?.get().catch(() => null);
     box.hidden = !this.overlay || !current;
+    settingsTabs.setAvailable('overlay', !box.hidden);
     if (!this.overlay || !current || !bridge?.overlay) return;
     const select = (id: string, value: string, options: [string, string][], onChange: (v: string) => void) => {
       const el = h('select');
@@ -978,7 +980,6 @@ export class Room {
     ]);
     const label = (text: string, control: HTMLElement) => h('label', {}, text, control);
     box.replaceChildren(
-      h('legend', { text: t('ov.title') }),
       h('label', { class: 'check' }, show, t('ov.show')),
       h('label', { class: 'check' }, minimize, t('ov.minimize')),
       ...(displays.length > 1
@@ -1252,8 +1253,9 @@ export class Room {
     modeSelect.onchange = () => this.signaling.send({ type: 'set-mode', pref: modeSelect.value as ModePreference });
     this.renderHostSettings();
     renderQualityForm($('quality-room'), this.media, (msg) => toast(msg, 'error'));
-    void this.renderOverlaySettings();
+    await this.renderOverlaySettings(); // decides whether the overlay topic is there at all
     this.renderStats();
+    settingsTabs.select();
     dialog.showModal();
   }
 

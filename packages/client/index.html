@@ -133,30 +133,62 @@
         </div>
       </footer>
 
-      <dialog id="settings">
+      <dialog id="settings" class="settings-dialog">
         <form method="dialog" class="settings-form">
           <div class="dialog-head">
             <h2 data-i18n="set.title">Ustawienia</h2>
             <button id="open-help" class="ghost" type="button" title="Skrócona instrukcja obsługi (F1)" data-i18n-title="set.helpTitle" data-i18n="set.help">Pomoc</button>
           </div>
-          <label><span data-i18n="set.mic">Mikrofon</span> <select id="set-audio-input"></select></label>
-          <label><span data-i18n="set.camera">Kamera</span> <select id="set-video-input"></select></label>
-          <label id="set-audio-output-wrap"><span data-i18n="set.speaker">Głośnik</span> <select id="set-audio-output"></select></label>
-          <label><span data-i18n="set.mode">Tryb mediów</span>
-            <select id="set-mode">
-              <option value="auto" data-i18n="set.modeAuto">Automatyczny</option>
-              <option value="mesh" data-i18n="set.modeMesh">P2P (bezpośrednio)</option>
-              <option value="sfu" data-i18n="set.modeSfu">SFU (przez serwer)</option>
-            </select>
-          </label>
-          <p id="mode-info" class="muted small"></p>
-          <fieldset id="host-settings" class="quality"></fieldset>
-          <fieldset id="overlay-settings" class="quality" hidden></fieldset>
-          <fieldset id="quality-room" class="quality"></fieldset>
-          <p id="send-stats" class="send-stats small" hidden></p>
-          <div id="peer-stats" class="peer-stats"></div>
-          <section id="about" class="about" aria-label="O aplikacji" data-i18n-aria-label="about.label"></section>
-          <button class="primary" value="close" data-i18n="set.close">Zamknij</button>
+          <div class="settings-body">
+            <nav class="settings-nav" role="tablist" aria-orientation="vertical" aria-label="Sekcje ustawień" data-i18n-aria-label="set.sections">
+              <button id="tab-devices" class="settings-tab" type="button" role="tab" data-tab="devices" data-icon="mic" aria-controls="panel-devices"><span data-i18n="tab.devices">Urządzenia</span></button>
+              <button id="tab-quality" class="settings-tab" type="button" role="tab" data-tab="quality" data-icon="sliders" aria-controls="panel-quality"><span data-i18n="tab.quality">Jakość</span></button>
+              <button id="tab-connection" class="settings-tab" type="button" role="tab" data-tab="connection" data-icon="network" aria-controls="panel-connection"><span data-i18n="tab.connection">Połączenie</span></button>
+              <button id="tab-room" class="settings-tab" type="button" role="tab" data-tab="room" data-icon="people" aria-controls="panel-room"><span data-i18n="tab.room">Pokój</span></button>
+              <button id="tab-overlay" class="settings-tab" type="button" role="tab" data-tab="overlay" data-icon="overlay" aria-controls="panel-overlay" hidden><span data-i18n="tab.overlay">Nakładka i skróty</span></button>
+              <button id="tab-about" class="settings-tab" type="button" role="tab" data-tab="about" data-icon="info" aria-controls="panel-about"><span data-i18n="tab.about">O aplikacji</span></button>
+            </nav>
+            <div class="settings-panels">
+            <section id="panel-devices" class="settings-panel" role="tabpanel" aria-labelledby="tab-devices" hidden>
+              <h3 data-i18n="tab.devices">Urządzenia</h3>
+              <label><span data-i18n="set.mic">Mikrofon</span> <select id="set-audio-input"></select></label>
+              <label><span data-i18n="set.camera">Kamera</span> <select id="set-video-input"></select></label>
+              <label id="set-audio-output-wrap"><span data-i18n="set.speaker">Głośnik</span> <select id="set-audio-output"></select></label>
+            </section>
+            <section id="panel-quality" class="settings-panel" role="tabpanel" aria-labelledby="tab-quality" hidden>
+              <h3 data-i18n="tab.quality">Jakość</h3>
+              <fieldset id="quality-room" class="quality"></fieldset>
+            </section>
+            <section id="panel-connection" class="settings-panel" role="tabpanel" aria-labelledby="tab-connection" hidden>
+              <h3 data-i18n="tab.connection">Połączenie</h3>
+              <label><span data-i18n="set.mode">Tryb mediów</span>
+                <select id="set-mode">
+                  <option value="auto" data-i18n="set.modeAuto">Automatyczny</option>
+                  <option value="mesh" data-i18n="set.modeMesh">P2P (bezpośrednio)</option>
+                  <option value="sfu" data-i18n="set.modeSfu">SFU (przez serwer)</option>
+                </select>
+              </label>
+              <p id="mode-info" class="muted small"></p>
+              <p id="send-stats" class="send-stats small" hidden></p>
+              <div id="peer-stats" class="peer-stats"></div>
+            </section>
+            <section id="panel-room" class="settings-panel" role="tabpanel" aria-labelledby="tab-room" hidden>
+              <h3 data-i18n="tab.room">Pokój</h3>
+              <fieldset id="host-settings" class="quality"></fieldset>
+            </section>
+            <section id="panel-overlay" class="settings-panel" role="tabpanel" aria-labelledby="tab-overlay" hidden>
+              <h3 data-i18n="tab.overlay">Nakładka i skróty</h3>
+              <fieldset id="overlay-settings" class="quality" hidden></fieldset>
+            </section>
+            <section id="panel-about" class="settings-panel" role="tabpanel" aria-labelledby="tab-about" hidden>
+              <h3 data-i18n="tab.about">O aplikacji</h3>
+              <section id="about" class="about" aria-label="O aplikacji" data-i18n-aria-label="about.label"></section>
+            </section>
+            </div>
+          </div>
+          <div class="dialog-foot">
+            <button class="primary" value="close" data-i18n="set.close">Zamknij</button>
+          </div>
         </form>
       </dialog>
     </main>

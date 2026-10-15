@@ -155,6 +155,7 @@ export class Participant {
 
   async setMode(mode: 'auto' | 'mesh' | 'sfu'): Promise<void> {
     await this.page.click('#btn-settings');
+    await this.page.click('#tab-connection');
     await this.page.selectOption('#set-mode', mode);
     await this.page.getByRole('button', { name: 'Zamknij' }).click();
   }

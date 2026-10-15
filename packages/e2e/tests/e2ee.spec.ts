@@ -110,6 +110,7 @@ test('safety codes: both sides of a connection see the same code', async ({ brow
   await a.expectVideoFrom('Bartek');
   const code = async (p: Participant) => {
     await p.page.click('#btn-settings');
+    await p.page.click('#tab-connection');
     const cell = p.page.locator('#peer-stats td.code');
     await expect(cell).toHaveText(/^\d{3} \d{3}$/);
     const text = await cell.innerText();

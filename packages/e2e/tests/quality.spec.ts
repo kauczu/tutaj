@@ -105,8 +105,10 @@ test('gaming profile over P2P: studio stereo audio with redundancy, 1080p captur
 
   // Switching the profile mid-call re-opens the mic and camera and retunes the senders — no renegotiation.
   await bartek.page.click('#btn-settings');
+  await bartek.page.click('#tab-quality');
   await bartek.page.selectOption('#quality-room-profile', 'game');
   await expect(bartek.page.locator('#quality-room-audio')).toHaveValue('studio');
+  await bartek.page.click('#tab-connection');
   await expect(bartek.page.locator('#send-stats')).toContainText('stereo');
   await expect.poll(async () => (await mediaInfo(bartek.page))[0]).toMatchObject({ audioMax: 160_000, echoCancellation: false, captureHeight: 1080 });
   await bartek.page.getByRole('button', { name: 'Zamknij' }).click();
@@ -150,6 +152,7 @@ test('video codec is chosen per sender: H.264 on one side, VP8 on the other', as
 
   // Switching the codec mid-call needs no renegotiation.
   await ania.page.click('#btn-settings');
+  await ania.page.click('#tab-quality');
   await ania.page.selectOption('#quality-room-codec', 'vp8');
   await expect.poll(async () => (await mediaInfo(ania.page))[0].videoCodec).toBe('video/VP8');
   await ania.page.getByRole('button', { name: 'Zamknij' }).click();

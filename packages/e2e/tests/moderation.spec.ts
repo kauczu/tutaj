@@ -38,6 +38,7 @@ test('host moderation: mute, lock, kick (kept out), hand over the host role', as
 
   // Lock: nobody new gets in; everyone sees 🔒.
   await ania.page.click('#btn-settings');
+  await ania.page.click('#tab-room');
   await ania.page.check('#host-lock');
   await ania.page.getByRole('button', { name: 'Zamknij' }).click();
   await expect(bartek.page.locator('#locked-badge')).toBeVisible();
@@ -46,6 +47,7 @@ test('host moderation: mute, lock, kick (kept out), hand over the host role', as
   await daria.submitJoin();
   await expect(daria.page.locator('#lobby-error')).toContainText('zablokowany');
   await ania.page.click('#btn-settings');
+  await ania.page.click('#tab-room');
   await ania.page.uncheck('#host-lock');
   await ania.page.getByRole('button', { name: 'Zamknij' }).click();
   await expect(bartek.page.locator('#locked-badge')).toBeHidden();

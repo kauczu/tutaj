@@ -74,6 +74,7 @@ test('game overlay: cameras of the others, muted badge, size reported to the app
 
   // Turned on in the settings (the desktop app also toggles it with Ctrl+Shift+O).
   await ania.page.click('#btn-settings');
+  await ania.page.click('#tab-overlay');
   await expect(ania.page.locator('#overlay-settings')).toBeVisible();
   // One monitor: no monitor choice.
   await expect(ania.page.locator('#overlay-display')).toHaveCount(0);
@@ -111,6 +112,7 @@ test('game overlay: cameras of the others, muted badge, size reported to the app
 
   // Settings apply live.
   await ania.page.click('#btn-settings');
+  await ania.page.click('#tab-overlay');
   await ania.page.selectOption('#overlay-size', 'l');
   await expect(overlay.locator('#root')).toHaveCSS('--w', '380px');
   await ania.page.getByRole('button', { name: 'Zamknij' }).click();
@@ -127,6 +129,7 @@ test('game overlay: cameras of the others, muted badge, size reported to the app
 
   // "Minimize the call window with the overlay" is the app's job; the page only stores the choice.
   await ania.page.click('#btn-settings');
+  await ania.page.click('#tab-overlay');
   await ania.page.check('#overlay-minimize');
   await expect.poll(() => ania.page.evaluate(() => window.__ov.settings.minimizeCall)).toBe(true);
   await ania.page.getByRole('button', { name: 'Zamknij' }).click();
@@ -147,6 +150,7 @@ test('shortcuts can be redefined: recorded from a key press, validated, restored
   const calls = () => page.evaluate(() => window.__ov.calls);
 
   await page.click('#btn-settings');
+  await page.click('#tab-overlay');
   await expect(page.locator('#hotkey-overlay')).toHaveText('Ctrl+Shift+O');
   await expect(page.locator('#hotkey-mute')).toHaveText('Ctrl+Shift+M');
   await expect(page.locator('#hotkey-window')).toHaveText('Ctrl+Shift+H');

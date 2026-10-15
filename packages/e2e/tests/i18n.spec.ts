@@ -30,6 +30,8 @@ test('English interface for an English browser; the choice in the lobby wins and
   await expect(page.locator('#help h3').first()).toHaveText('Starting a call');
   await page.keyboard.press('Escape');
   await page.click('#btn-settings');
+  await expect(page.locator('#tab-quality')).toHaveText('Quality');
+  await page.click('#tab-quality');
   await expect(page.locator('#quality-room-profile option:checked')).toHaveText('Call');
   await expect(page.locator('#host-settings legend')).toHaveText('Room host (you)');
   await page.getByRole('button', { name: 'Close' }).click();
