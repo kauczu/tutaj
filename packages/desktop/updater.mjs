@@ -3,7 +3,7 @@
 // At start (and from the menu) the app checks the latest release. A newer version is offered in a
 // dialog; on "yes" it downloads with a progress window (and progress on the taskbar icon), then
 // installs silently and restarts — right away, or after the call if one is in progress.
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -145,6 +145,27 @@ export function initUpdater(ctx) {
 }
 
 /** Small window with the download progress. Closing it only hides it; the download goes on. */
+/**
+ * Over the call window, on its monitor: Windows would otherwise put a new window on the primary
+ * display, even when the app sits on another one.
+ */
+function centredOver(owner, width, height) {
+  // Minimized: where it comes back to when restored.
+  const b = owner ? (owner.isMinimized() ? owner.getNormalBounds() : owner.getBounds()) : null;
+  const area = (b ? screen.getDisplayMatching(b) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint())).workArea;
+  const ref = b ?? area;
+  // Rough frame allowance (title bar, borders) so it never spills off the screen.
+  const outerW = width + 16;
+  const outerH = height + 40;
+  const clamp = (v, min, size, outer) => Math.round(Math.max(min, Math.min(min + size - outer, v)));
+  return {
+    width,
+    height,
+    x: clamp(ref.x + (ref.width - outerW) / 2, area.x, area.width, outerW),
+    y: clamp(ref.y + (ref.height - outerH) / 2, area.y, area.height, outerH),
+  };
+}
+
 function createProgressWindow(parent) {
   let win = null;
   let last = null;
@@ -152,11 +173,11 @@ function createProgressWindow(parent) {
   const open = () => {
     if (win && !win.isDestroyed()) return win;
     const p = parent();
+    const owner = p && !p.isDestroyed() ? p : undefined;
     win = new BrowserWindow({
-      width: 460,
-      height: 200,
+      ...centredOver(owner, 460, 200),
       useContentSize: true,
-      parent: p && !p.isDestroyed() ? p : undefined,
+      parent: owner,
       resizable: false,
       minimizable: false,
       maximizable: false,
