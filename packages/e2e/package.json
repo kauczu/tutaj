@@ -1,6 +1,6 @@
 {
   "name": "@tutaj/e2e",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "Testy end-to-end w Chromium z fałszywą kamerą i mikrofonem.",
   "type": "module",
@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "@tutaj/server": "0.7.0",
+    "@tutaj/server": "0.7.1",
     "@types/node": "22.20.4",
     "ws": "8.21.3"
   },
