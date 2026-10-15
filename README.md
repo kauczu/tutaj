@@ -36,6 +36,8 @@ przeciążony procesor albo ruch przez TURN), pokój **automatycznie przechodzi 
 - hasło pokoju, link z zaproszeniem, skróty klawiszowe (M, V, S, H, C, R)
 - **rozmowa przetrwa awarię serwera** – trwające połączenia P2P działają dalej, klient sam wraca i wznawia sesję
 - **hybryda P2P/SFU** – automatyczne przełączanie (lub ręczne: Ustawienia → Tryb mediów), simulcast, wskaźnik P2P/SFU na pasku
+- **obraz w obrazie** (przeglądarka: Chrome, Edge) – małe okno z kamerami zawsze na wierzchu, z przyciskami mikrofonu, kamery
+  i rozłączenia; przycisk lub P, a w Chrome/Edge otwiera się samo po przejściu do innej karty (w aplikacji desktopowej jest nakładka)
 - **nakładka na grę** (aplikacja desktopowa) – małe kamery współgraczy nad grą, skróty działające w grze
 - **szyfrowanie end-to-end także przez SFU** – serwer przekazuje obraz i dźwięk, których nie może odczytać; kody bezpieczeństwa
 - **profil jakości „Gra”** – dźwięk studyjny, kamera 1080p, sprzętowe kodowanie i limit wysyłania (zob. niżej)

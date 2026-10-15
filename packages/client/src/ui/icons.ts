@@ -12,6 +12,7 @@ const paths = {
   leave: '<path d="M3 15.5c5-4.7 13-4.7 18 0l-2.4 2.4-3.3-1.6v-2.8a11 11 0 0 0-6.6 0v2.8l-3.3 1.6z"/>',
   overlay: '<rect x="2" y="4" width="20" height="14" rx="2"/><rect x="13" y="6.5" width="6.5" height="4.5" rx="1" fill="currentColor" stroke="none"/><path d="M8 21h8"/>',
   react: '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="2.6"/>',
+  pip: '<rect x="2" y="4" width="20" height="15" rx="2"/><rect x="12" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none"/>',
   file: '<path d="M21 12.5 12.5 21a5 5 0 0 1-7-7L14 5.5a3.5 3.5 0 0 1 5 5L10.5 19a2 2 0 0 1-3-3L15 8.5"/>',
 } as const;
 

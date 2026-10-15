@@ -1,6 +1,7 @@
 import { lang } from '../i18n';
 import { $, h } from './dom';
 import { formatAccelerator, type Hotkeys } from './hotkeys';
+import { PipWindow } from './pip';
 
 type Block = HTMLElement | string;
 
@@ -40,10 +41,14 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
         ['H', 'podnieś/opuść rękę'],
         ['C', 'czat'],
         ['R', 'reakcja — potem 1–6 (👍 ❤️ 😂 😮 👏 🎉)'],
+        ...(PipWindow.supported() ? ([['P', 'obraz w obrazie — małe okno z kamerami zawsze na wierzchu']] as [string, string][]) : []),
         ['F1', 'ta pomoc'],
       ]),
       list(
         ['Kliknięcie kafelka powiększa osobę, dwuklik — pełny ekran.'],
+        ...(PipWindow.supported()
+          ? [[b('Obraz w obrazie'), ' (przycisk lub P) otwiera się też sam, gdy przejdziesz do innej karty — rozmowa zostaje na wierzchu, z przyciskami mikrofonu, kamery i rozłączenia.'] as Block[]]
+          : []),
         ['Kropka przy imieniu to jakość połączenia (zielona — dobra, żółta — średnia, czerwona — słaba).'],
         ['Czat przesyła też ', b('pliki'), ' (do 2 GB) — bezpośrednio między uczestnikami; przeciągnij plik do czatu lub użyj spinacza.'],
         [b('Nagrywanie'), ' zapisuje rozmowę na Twoim komputerze (plik .webm); pozostali dostają informację w czacie.'],
@@ -129,10 +134,14 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
         ['H', 'raise/lower your hand'],
         ['C', 'chat'],
         ['R', 'reaction — then 1–6 (👍 ❤️ 😂 😮 👏 🎉)'],
+        ...(PipWindow.supported() ? ([['P', 'picture-in-picture — a small always-on-top window with the cameras']] as [string, string][]) : []),
         ['F1', 'this help'],
       ]),
       list(
         ['Click a tile to enlarge that person, double-click for full screen.'],
+        ...(PipWindow.supported()
+          ? [[b('Picture-in-picture'), ' (button or P) also opens by itself when you switch to another tab — the call stays on top, with microphone, camera and hang-up buttons.'] as Block[]]
+          : []),
         ['The dot next to a name shows the connection quality (green — good, yellow — fair, red — poor).'],
         ['The chat also sends ', b('files'), ' (up to 2 GB) — directly between participants; drop a file into the chat or use the paperclip.'],
         [b('Recording'), ' saves the call on your computer (a .webm file); the others get a note in the chat.'],

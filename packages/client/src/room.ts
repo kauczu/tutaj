@@ -16,6 +16,7 @@ import { Grid, Tile } from './ui/grid';
 import { setIcon } from './ui/icons';
 import { acceleratorFromEvent, formatAccelerator, type HotkeyName } from './ui/hotkeys';
 import { GameOverlay, type OverlaySettings } from './ui/overlay';
+import { PipWindow } from './ui/pip';
 import { renderQualityForm } from './ui/quality-form';
 import { REACTIONS, type Reaction } from './ui/reactions';
 import { toast } from './ui/toast';
@@ -139,6 +140,8 @@ export class Room {
   private readonly codes = new Map<string, string>();
   /** Desktop app only. */
   private overlay: GameOverlay | null = null;
+  /** Browser only (the desktop app has the overlay): an always-on-top mini window. */
+  private readonly pip: PipWindow | null;
   private readonly startedAt = Date.now();
   private readonly timers: number[] = [];
   private readonly cleanups: (() => void)[] = [];
@@ -180,6 +183,21 @@ export class Room {
     );
 
     this.e2ee = E2ee.supported() ? new E2ee((peer, problem) => this.onE2eeProblem(peer, problem)) : null;
+
+    this.pip = PipWindow.supported()
+      ? new PipWindow(
+          this.grid,
+          {
+            toggleMic: () => void this.toggleMic(),
+            toggleCam: () => void this.toggleCam(),
+            leave: () => void this.leave(),
+            micOn: () => !!this.media.audioTrack && this.media.audioEnabled,
+            camOn: () => this.media.cameraOn,
+          },
+          () => this.updateControls(),
+        )
+      : null;
+    this.registerAutoPip();
 
     this.cleanups.push(this.media.on('change', () => this.onLocalMediaChange()));
     void this.initOverlay();
@@ -806,6 +824,7 @@ export class Room {
     on('btn-screen', () => void this.toggleScreen());
     on('btn-hand', () => this.toggleHand());
     on('btn-react', () => this.toggleReactionPicker());
+    on('btn-pip', () => void this.pip?.toggle());
     this.buildReactionPicker();
     on('btn-chat', () => this.chat.toggle());
     on('btn-record', () => void this.toggleRecording());
@@ -832,6 +851,7 @@ export class Room {
       }
       const actions: Record<string, () => void> = {
         r: () => this.toggleReactionPicker(),
+        p: () => void this.pip?.toggle(),
         m: () => void this.toggleMic(),
         v: () => void this.toggleCam(),
         s: () => void this.toggleScreen(),
@@ -870,6 +890,11 @@ export class Room {
     $('btn-record').classList.toggle('recording', this.recorder.active);
     setIcon($('btn-settings'), 'settings');
     setIcon($('btn-react'), 'react');
+    setIcon($('btn-pip'), 'pip');
+    $('btn-pip').hidden = !this.pip;
+    $('btn-pip').classList.toggle('active', !!this.pip?.isOpen);
+    $('btn-pip').setAttribute('aria-pressed', String(!!this.pip?.isOpen));
+    this.pip?.refreshControls();
     setIcon($('btn-overlay'), 'overlay');
     $('btn-overlay').classList.toggle('active', !!this.overlay?.isOpen);
     $('btn-overlay').setAttribute('aria-pressed', String(!!this.overlay?.isOpen));
@@ -1086,6 +1111,25 @@ export class Room {
       await this.media.startScreen();
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'NotAllowedError')) toast(t('media.screenProblem', { error: describeMediaError(e) }), 'error');
+    }
+  }
+
+  // --- Picture-in-picture (browser) ----------------------------------------------
+
+  /** Chrome/Edge open the mini window by themselves when you switch to another tab mid-call. */
+  private registerAutoPip(): void {
+    if (!this.pip || !('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.setActionHandler('enterpictureinpicture' as MediaSessionAction, () => void this.pip?.open());
+      this.cleanups.push(() => {
+        try {
+          navigator.mediaSession.setActionHandler('enterpictureinpicture' as MediaSessionAction, null);
+        } catch {
+          /* ignore */
+        }
+      });
+    } catch {
+      /* not supported: the button and P still work */
     }
   }
 
@@ -1311,6 +1355,7 @@ export class Room {
     if (this.recorder.active) await this.saveRecording();
     for (const p of this.peers.values()) p.sendApp({ t: 'bye' } satisfies AppMessage);
     this.sfu?.close();
+    this.pip?.close();
     this.signaling.send({ type: 'leave' });
     this.signaling.close();
     for (const id of [...this.peers.keys()]) this.removePeer(id);
