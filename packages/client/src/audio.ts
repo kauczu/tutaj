@@ -2,7 +2,7 @@ interface Watched {
   trackId: string;
   source: MediaStreamAudioSourceNode;
   analyser: AnalyserNode;
-  data: Uint8Array;
+  data: Uint8Array<ArrayBuffer>;
   speaking: boolean;
   lastLoud: number;
 }

@@ -22,6 +22,9 @@ export function codecFromMime(mime: string | undefined): FrameCodec {
   return 'other';
 }
 
+/** Bytes on a plain ArrayBuffer: what WebCrypto takes (typed arrays are generic over the buffer since TS 5.7). */
+export type Bytes = Uint8Array<ArrayBuffer>;
+
 /** Start offsets of NAL unit headers (right after each 00 00 01 start code) in an Annex B frame. */
 function nalStarts(data: Uint8Array): number[] {
   const starts: number[] = [];
@@ -59,7 +62,7 @@ export function clearLength(data: Uint8Array, codec: FrameCodec, keyFrame: boole
  * Emulation prevention: 00 00 0x (x ≤ 3) → 00 00 03 0x, so no start code can appear.
  * `zeros`: zero bytes right before `data` (the end of the clear header), so none forms across the boundary.
  */
-export function escapeH264(data: Uint8Array, zeros = 0): Uint8Array {
+export function escapeH264(data: Bytes, zeros = 0): Bytes {
   const out: number[] = [];
   for (const b of data) {
     if (zeros >= 2 && b <= 3) {
@@ -72,7 +75,7 @@ export function escapeH264(data: Uint8Array, zeros = 0): Uint8Array {
   return Uint8Array.from(out);
 }
 
-export function unescapeH264(data: Uint8Array, zeros = 0): Uint8Array {
+export function unescapeH264(data: Bytes, zeros = 0): Bytes {
   const out: number[] = [];
   for (let i = 0; i < data.length; i++) {
     const b = data[i];
@@ -92,7 +95,7 @@ const trailingZeros = (b: Uint8Array) => (b.length > 0 && b[b.length - 1] === 0 
  * Encrypts one encoded frame. `keyIndex` (1–255, never 0: the last byte must not be zero for H.264)
  * tells the receiver which of the sender's keys to use.
  */
-export async function encryptFrame(data: Uint8Array, codec: FrameCodec, keyFrame: boolean, key: CryptoKey, keyIndex: number): Promise<Uint8Array> {
+export async function encryptFrame(data: Bytes, codec: FrameCodec, keyFrame: boolean, key: CryptoKey, keyIndex: number): Promise<Bytes> {
   const clear = clearLength(data, codec, keyFrame);
   const header = data.subarray(0, clear);
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
@@ -114,7 +117,7 @@ export function frameKeyIndex(data: Uint8Array): number | null {
 }
 
 /** Decrypts one frame; throws if the key is wrong or anything was tampered with. */
-export async function decryptFrame(data: Uint8Array, codec: FrameCodec, keyFrame: boolean, key: CryptoKey): Promise<Uint8Array> {
+export async function decryptFrame(data: Bytes, codec: FrameCodec, keyFrame: boolean, key: CryptoKey): Promise<Bytes> {
   const clear = clearLength(data, codec, keyFrame);
   const header = data.subarray(0, clear);
   let tail = data.subarray(clear);
@@ -130,6 +133,6 @@ export async function decryptFrame(data: Uint8Array, codec: FrameCodec, keyFrame
   return out;
 }
 
-export function importFrameKey(raw: Uint8Array): Promise<CryptoKey> {
+export function importFrameKey(raw: Bytes): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }

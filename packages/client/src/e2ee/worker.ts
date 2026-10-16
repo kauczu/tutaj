@@ -1,12 +1,12 @@
 /// <reference lib="webworker" />
 // Frame encryption worker: one per page, shared by all SFU senders and receivers (RTCRtpScriptTransform).
-import { codecFromMime, decryptFrame, encryptFrame, frameKeyIndex, importFrameKey, type FrameCodec } from './frame';
+import { codecFromMime, decryptFrame, encryptFrame, frameKeyIndex, importFrameKey, type Bytes, type FrameCodec } from './frame';
 
 export type WorkerIn =
   /** Our own key for outgoing frames. */
-  | { type: 'send-key'; index: number; raw: Uint8Array }
+  | { type: 'send-key'; index: number; raw: Bytes }
   /** A participant's key for their frames (several indexes are kept during a rotation). */
-  | { type: 'peer-key'; peer: string; index: number; raw: Uint8Array }
+  | { type: 'peer-key'; peer: string; index: number; raw: Bytes }
   | { type: 'forget-peer'; peer: string };
 
 export type WorkerOut =

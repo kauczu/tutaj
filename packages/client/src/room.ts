@@ -1164,7 +1164,7 @@ export class Room {
   private toggleReactionPicker(open?: boolean): void {
     const picker = $('reaction-picker');
     const btn = $('btn-react');
-    const show = open ?? picker.hidden;
+    const show = open ?? picker.hidden !== false;
     picker.hidden = !show;
     btn.setAttribute('aria-expanded', String(show));
     btn.classList.toggle('active', show);

@@ -25,7 +25,8 @@ interface MediaInfo {
   /** Opus parameters from the remote description: they configure our encoder. */
   audioFmtp: string;
   redFirst: boolean;
-  echoCancellation: boolean | undefined;
+  /** true/false, or a mode name in newer browsers (e.g. 'all'). */
+  echoCancellation: boolean | string | undefined;
   captureHeight: number | undefined;
   audioKbps: number;
   videoCodec: string | undefined;

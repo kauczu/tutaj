@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "concurrently": "9.1.0",
-    "typescript": "5.6.3"
+    "typescript": "7.0.2"
   },
   "author": "Lorem Ipsum (https://tutaj.eu.org)",
   "homepage": "https://github.com/kauczu/tutaj",
