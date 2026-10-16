@@ -8,17 +8,17 @@ Efekt: `https://<twoja-domena>` z aplikacją, SFU i serwerem TURN. Wszystko dzia
 | `caddy` | HTTPS z automatycznym certyfikatem Let's Encrypt | 80, 443 tcp |
 | `coturn` | TURN – przekaźnik dla sieci, w których P2P nie przejdzie | 3478 tcp+udp, 49160–49200 udp |
 
-Poniżej przykładowa domena `rozmowa.tutaj.eu.org` – podstaw własną subdomenę.
+Poniżej przykładowa domena `rozmowa.twoja-domena.pl` – podstaw własną domenę lub subdomenę.
 
 ## Wymagania
 
 - VPS z **publicznym IPv4** (bez współdzielonego adresu/CGNAT), Ubuntu 22.04+ lub Debian 12+, 1–2 vCPU, 2 GB RAM.
 - Dostęp SSH z uprawnieniami `sudo`.
-- Możliwość dodania rekordu DNS w strefie `tutaj.eu.org`.
+- Domena (lub subdomena), dla której możesz dodać rekord DNS.
 
 ## 1. Rekord DNS
 
-U dostawcy DNS domeny `tutaj.eu.org` dodaj rekord:
+U dostawcy DNS swojej domeny dodaj rekord:
 
 | Typ | Nazwa | Wartość | TTL |
 |---|---|---|---|
@@ -30,7 +30,7 @@ TURN ani SFU (UDP), a aplikacja łączy się z nimi pod tą samą nazwą.
 Sprawdź (z własnego komputera, po kilku minutach):
 
 ```powershell
-nslookup rozmowa.tutaj.eu.org
+nslookup rozmowa.twoja-domena.pl
 ```
 
 ## 2. Zapora u dostawcy VPS
@@ -62,7 +62,7 @@ Na serwerze (`ssh uzytkownik@IP_SERWERA`):
 
 ```bash
 cd ~/tutaj/deploy
-sudo bash install.sh rozmowa.tutaj.eu.org
+sudo bash install.sh rozmowa.twoja-domena.pl
 ```
 
 Skrypt:
@@ -128,7 +128,7 @@ nazwą powinna też mieć własną markę – zob. [NOTICE.md](../NOTICE.md).
 
 ## 5. Sprawdzenie
 
-1. Otwórz `https://rozmowa.tutaj.eu.org` – powinna być kłódka (pierwsze wejście może potrwać kilkanaście sekund).
+1. Otwórz `https://rozmowa.twoja-domena.pl` – powinna być kłódka (pierwsze wejście może potrwać kilkanaście sekund).
 2. Dołącz z komputera i z **telefonu na danych komórkowych** (wyłączone Wi-Fi) – to wymusza drogę przez internet.
 3. W **Ustawieniach** zobacz tabelę połączeń: „Trasa” = `P2P` albo `TURN` (gdy sieć wymaga przekaźnika).
 4. Z trzema osobami ustaw **Tryb mediów → SFU** – znaczek na pasku zmieni się na „SFU”, obraz ma działać dalej.
@@ -136,7 +136,7 @@ nazwą powinna też mieć własną markę – zob. [NOTICE.md](../NOTICE.md).
 Z serwera:
 
 ```bash
-curl -s https://rozmowa.tutaj.eu.org/api/health      # {"ok":true,"rooms":…,"clients":…}
+curl -s https://rozmowa.twoja-domena.pl/api/health      # {"ok":true,"rooms":…,"clients":…}
 cd ~/tutaj/deploy && docker compose logs -f          # logi wszystkich usług
 ```
 
