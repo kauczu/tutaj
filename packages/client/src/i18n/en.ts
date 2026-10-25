@@ -178,6 +178,8 @@ export const en: Record<Key, string> = {
   'ctl.chat': 'Chat (C)',
   'ctl.overlay': 'Game overlay',
   'ctl.pip': 'Picture-in-picture (P)',
+  'ctl.more': 'More',
+  'ctl.flip': 'Switch camera (front / back)',
   'pip.title': 'Tutaj — picture-in-picture',
   'pip.waiting': 'Waiting for others…',
   'ctl.record': 'Record locally',

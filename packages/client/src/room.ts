@@ -18,6 +18,7 @@ import { acceleratorFromEvent, formatAccelerator, type HotkeyName } from './ui/h
 import { GameOverlay, type OverlaySettings } from './ui/overlay';
 import { PipWindow } from './ui/pip';
 import { settingsTabs } from './ui/settings-tabs';
+import { CompactLayout } from './ui/compact';
 import { renderQualityForm } from './ui/quality-form';
 import { REACTIONS, type Reaction } from './ui/reactions';
 import { toast } from './ui/toast';
@@ -141,6 +142,9 @@ export class Room {
   private readonly codes = new Map<string, string>();
   /** Desktop app only. */
   private overlay: GameOverlay | null = null;
+  /** Phone layout: others full screen, our camera floating, auto-hiding controls. */
+  private compact: CompactLayout | null = null;
+  private cameras = 0;
   /** Browser only (the desktop app has the overlay): an always-on-top mini window. */
   private readonly pip: PipWindow | null;
   private readonly startedAt = Date.now();
@@ -209,7 +213,7 @@ export class Room {
     $('room-name').textContent = opts.roomId;
     $('lobby').hidden = true;
     $('room-view').hidden = false;
-    document.body.classList.add('in-room');
+    document.documentElement.classList.add('in-room');
     this.updateControls();
   }
 
@@ -833,6 +837,10 @@ export class Room {
     on('btn-settings', () => void this.openSettings());
     on('btn-leave', () => void this.leave());
     on('btn-invite', () => void this.copyInvite());
+    this.compact = new CompactLayout(this.grid, () => this.phoneItems());
+    this.cleanups.push(this.grid.onChange(() => this.compact?.refresh()));
+    this.cleanups.push(() => this.compact?.close());
+    void LocalMedia.devices('videoinput').then((cams) => (this.cameras = cams.length));
 
     if (!navigator.mediaDevices?.getDisplayMedia) $('btn-screen').hidden = true;
     if (!CallRecorder.supported()) $('btn-record').hidden = true;
@@ -873,6 +881,20 @@ export class Room {
     this.cleanups.push(() => window.removeEventListener('pagehide', onHide));
   }
 
+  /** "More" menu extras on a phone: front/back camera. */
+  private phoneItems(): { label: string; run: () => void }[] {
+    if (!this.media.cameraOn || this.cameras < 2) return [];
+    return [{ label: t('ctl.flip'), run: () => void this.flipCamera() }];
+  }
+
+  private async flipCamera(): Promise<void> {
+    try {
+      await this.media.flipCamera();
+    } catch (e) {
+      toast(t('media.cameraProblem', { error: describeMediaError(e) }), 'error');
+    }
+  }
+
   private updateControls(): void {
     const set = (id: string, active: boolean, iconOn: Parameters<typeof setIcon>[1], iconOff = iconOn, offIsBad = true) => {
       const btn = $(id);
@@ -890,6 +912,11 @@ export class Room {
     setIcon($('btn-record'), 'record');
     $('btn-record').classList.toggle('recording', this.recorder.active);
     setIcon($('btn-settings'), 'settings');
+    setIcon($('btn-more'), 'more');
+    if (this.localTile.mirrorSelf !== (this.media.facing !== 'environment')) {
+      this.localTile.mirrorSelf = this.media.facing !== 'environment';
+      this.localTile.setState(this.myState());
+    }
     setIcon($('btn-react'), 'react');
     setIcon($('btn-pip'), 'pip');
     $('btn-pip').hidden = !this.pip;

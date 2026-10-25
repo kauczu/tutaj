@@ -55,6 +55,11 @@ export class LocalMedia extends Emitter<MediaEvents> {
   screenTrack: MediaStreamTrack | null = null;
   audioDeviceId: string | undefined;
   videoDeviceId: string | undefined;
+  /** Which way the camera looks, when the device says (phones): the back camera is not mirrored. */
+  get facing(): 'user' | 'environment' | undefined {
+    const f = this.cameraTrack?.getSettings().facingMode;
+    return f === 'user' || f === 'environment' ? f : undefined;
+  }
   /** Mic mute is done via track.enabled so unmuting is instant. */
   audioEnabled = true;
   quality: QualitySettings = loadQuality();
@@ -145,6 +150,17 @@ export class LocalMedia extends Emitter<MediaEvents> {
     this.cameraTrack?.stop();
     this.cameraTrack = track;
     this.videoDeviceId = track.getSettings().deviceId ?? deviceId;
+    this.emit('change', undefined);
+  }
+
+  /** Phones: switches between the front and the back camera. */
+  async flipCamera(): Promise<void> {
+    const facingMode = this.facing === 'environment' ? 'user' : 'environment';
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(this.quality), facingMode: { exact: facingMode } } });
+    const track = stream.getVideoTracks()[0];
+    this.cameraTrack?.stop();
+    this.cameraTrack = track;
+    this.videoDeviceId = track.getSettings().deviceId;
     this.emit('change', undefined);
   }
 

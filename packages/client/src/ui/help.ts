@@ -46,6 +46,7 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
       ]),
       list(
         ['Kliknięcie kafelka powiększa osobę, dwuklik — pełny ekran.'],
+        [b('Na telefonie'), ' rozmówca zajmuje cały ekran, a Twoja kamera to małe okienko w rogu — przeciągnij je w inny róg albo dotknij, żeby zamienić widoki. Pasek przycisków chowa się sam; dotknij obrazu, żeby go przywrócić. Pozostałe opcje (ręka, ustawienia, zaproszenie, przełączenie kamery przód/tył) są pod „⋯”.'],
         ...(PipWindow.supported()
           ? [[b('Obraz w obrazie'), ' (przycisk lub P) otwiera się też sam, gdy przejdziesz do innej karty — rozmowa zostaje na wierzchu, z przyciskami mikrofonu, kamery i rozłączenia.'] as Block[]]
           : []),
@@ -139,6 +140,7 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
       ]),
       list(
         ['Click a tile to enlarge that person, double-click for full screen.'],
+        [b('On a phone'), ' the other person fills the screen and your camera is a small window in a corner — drag it to another corner or tap it to swap the views. The button bar hides by itself; tap the picture to bring it back. The other options (hand, settings, invitation, front/back camera) are under “⋯”.'],
         ...(PipWindow.supported()
           ? [[b('Picture-in-picture'), ' (button or P) also opens by itself when you switch to another tab — the call stays on top, with microphone, camera and hang-up buttons.'] as Block[]]
           : []),

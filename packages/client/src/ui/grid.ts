@@ -18,6 +18,8 @@ export class Tile {
   private readonly statusEl: HTMLDivElement;
   state: PeerState;
   speaking = false;
+  /** Our own tile: false for a phone's back camera (what it films is not you). */
+  mirrorSelf = true;
   /** Set by the grid: called whatever changes what the tile shows (mirrored by the game overlay). */
   onChange: () => void = () => {};
   /** Set by the grid: a reaction was shown on this tile. */
@@ -69,8 +71,8 @@ export class Tile {
     this.el.classList.toggle('screen', state.screen);
     this.el.classList.toggle('muted', !state.audio);
     this.el.classList.toggle('hand-up', state.hand);
-    // Mirror our own camera (feels natural), but never a shared screen.
-    this.el.classList.toggle('mirror', this.local && !state.screen);
+    // Mirror our own camera (feels natural), but never a shared screen or a phone's back camera.
+    this.el.classList.toggle('mirror', this.local && !state.screen && this.mirrorSelf);
     this.onChange();
   }
 
@@ -107,10 +109,18 @@ export class Tile {
   }
 }
 
-/** Video grid. Click a tile to spotlight it, double-click for fullscreen. */
+/**
+ * Video grid. Click a tile to spotlight it, double-click for fullscreen.
+ * Compact (phone) layout: a tap on the big picture shows/hides the controls, a tap on a small
+ * tile (our own floating camera, or the strip under a spotlighted one) brings it to the front,
+ * a double tap spotlights / un-spotlights.
+ */
 export class Grid {
   private tiles = new Map<string, Tile>();
   private pinned: string | null = null;
+  /** Set by the compact layout. */
+  compact: () => boolean = () => false;
+  onStageTap: () => void = () => {};
   private listeners = new Set<() => void>();
   private reactionListeners = new Set<(id: string, emoji: string) => void>();
   private pending = false;
@@ -144,8 +154,14 @@ export class Grid {
     tile.onReaction = (emoji) => {
       for (const fn of this.reactionListeners) fn(tile.id, emoji);
     };
-    tile.el.addEventListener('click', () => this.pin(this.pinned === tile.id ? null : tile.id));
+    tile.el.addEventListener('click', () => {
+      if (!this.compact()) return this.pin(this.pinned === tile.id ? null : tile.id);
+      if (this.isMain(tile)) return this.onStageTap();
+      // With two people the other one is the big picture anyway: "bring to front" = back to normal.
+      this.pin(!tile.local && this.tiles.size === 2 ? null : tile.id);
+    });
     tile.el.addEventListener('dblclick', () => {
+      if (this.compact()) return this.pin(this.pinned === tile.id ? null : tile.id);
       if (document.fullscreenElement) void document.exitFullscreen();
       else void tile.el.requestFullscreen?.();
     });
@@ -168,6 +184,12 @@ export class Grid {
 
   all(): Tile[] {
     return [...this.tiles.values()];
+  }
+
+  /** Compact layout: part of the big picture (not our floating camera, not the strip under a spotlight). */
+  private isMain(tile: Tile): boolean {
+    if (this.pinned) return this.pinned === tile.id;
+    return !tile.local || this.tiles.size === 1;
   }
 
   pin(id: string | null): void {

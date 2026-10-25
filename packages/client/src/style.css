@@ -30,27 +30,23 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; color: var(--text); }
-/* Only <html> gets a background: a body background would paint over the z-index:-1 scene. */
-html { background: var(--space); }
-body { overflow: hidden; }
-
-/* The scene: Earth's horizon and the Moon, behind everything. */
-body::before,
-body::after { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; }
-body::before {
-  background: var(--space) url('/background.webp') center 62% / cover no-repeat;
-}
-body::after {
-  background:
-    radial-gradient(120% 70% at 50% 100%, rgba(2, 6, 12, 0.55), transparent 60%),
+/*
+ * The scene: Earth's horizon and the Moon, behind everything — painted by <html> itself (a veil of
+ * gradients over the picture). Not z-index:-1 pseudo-elements: some iOS browsers (Brave) skip those.
+ */
+html {
+  --scene: url('/background.webp');
+  --scene-pos: center 62%;
+  --veil: radial-gradient(120% 70% at 50% 100%, rgba(2, 6, 12, 0.55), transparent 60%),
     linear-gradient(180deg, rgba(2, 6, 12, 0.2), rgba(2, 6, 12, 0.05) 45%, rgba(2, 6, 12, 0.6));
-  transition: background 0.6s;
+  background: var(--veil), var(--scene) var(--scene-pos) / cover no-repeat var(--space);
 }
 /* In a call the scene steps back so faces stand out. */
-body.in-room::after { background: rgba(2, 6, 12, 0.66); }
+html.in-room { --veil: linear-gradient(rgba(2, 6, 12, 0.66), rgba(2, 6, 12, 0.66)); }
 @media (max-width: 700px) {
-  body::before { background-image: url('/background-mobile.webp'); background-position: 30% 60%; }
+  html { --scene: url('/background-mobile.webp'); --scene-pos: 30% 60%; }
 }
+body { overflow: hidden; }
 
 [hidden] { display: none !important; }
 button { font: inherit; color: inherit; cursor: pointer; }
@@ -241,6 +237,7 @@ details[hidden] { display: none; }
   font: inherit; font-size: 14px; cursor: pointer; }
 .tile-menu button:hover { background: var(--glass-hover); }
 .tile-menu button.danger { color: #ff9a9d; }
+.tile-menu button.checked::after { content: ' ✓'; color: var(--accent-bright); }
 .mode-badge.locked { background: rgba(242, 194, 122, 0.14); color: var(--warn); }
 /* ---- Reactions ---- */
 .reaction { position: absolute; bottom: 8%; z-index: 3; pointer-events: none; font-size: clamp(30px, 5vw, 64px);
@@ -304,6 +301,70 @@ details[hidden] { display: none; }
   .controls { justify-content: center; padding-inline: 8px; }
   .round { width: 44px; height: 44px; }
   .controls .buttons { gap: 6px; }
+}
+
+/* ---- Phone layout (same query as COMPACT_QUERY in ui/compact.ts) ----
+ * The others fill the screen edge to edge; our own camera floats in a corner; the control bar lies
+ * over the picture, keeps to one row (the rest is under "more") and hides itself. */
+#btn-more { display: none; }
+@media (max-width: 700px), (max-height: 500px) {
+  .room { display: block; position: relative; }
+  .stage { position: absolute; inset: 0; padding: 0; }
+  .grid { gap: 2px; }
+  /* Others one above another (own camera floats, so it takes no cell). */
+  .grid[data-count]:not(.has-pinned) { grid-template-columns: 1fr; }
+  .grid[data-count="3"] .tile:last-child { grid-column: auto; }
+  .tile { border: 0; border-radius: 0; box-shadow: none; }
+  .tile.speaking { box-shadow: inset 0 0 0 3px rgba(var(--atmo), 0.85); }
+  .tile .label { left: calc(10px + env(safe-area-inset-left)); transition: bottom 0.25s; }
+  /* The bottom picture's name stays above the bar. */
+  .grid:not(.has-pinned) .tile:nth-last-child(1 of :not(.local)) .label,
+  .grid[data-count="1"] .tile .label { bottom: calc(var(--bar-h, 72px) + 8px); }
+  .room.controls-hidden .tile .label { bottom: calc(10px + env(safe-area-inset-bottom)) !important; }
+  .tile-menu-btn { top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); }
+  .tile .status { top: calc(10px + env(safe-area-inset-top)); }
+
+  /* Our own camera: a small window in a corner, above the bar. */
+  .grid:not([data-count="1"]) .tile.local:not(.pinned) {
+    position: absolute; z-index: 4; width: min(30vw, 150px); aspect-ratio: 3 / 4; height: auto;
+    border-radius: 14px; border: 1px solid var(--border-strong); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    right: calc(12px + env(safe-area-inset-right)); bottom: calc(var(--bar-h, 72px) + 12px);
+    transition: top 0.25s, bottom 0.25s, left 0.25s, right 0.25s; touch-action: none;
+  }
+  .grid:not([data-count="1"]) .tile.local.corner-tl:not(.pinned),
+  .grid:not([data-count="1"]) .tile.local.corner-tr:not(.pinned) { top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
+  .grid:not([data-count="1"]) .tile.local.corner-tl:not(.pinned),
+  .grid:not([data-count="1"]) .tile.local.corner-bl:not(.pinned) { left: calc(12px + env(safe-area-inset-left)); right: auto; }
+  .room.controls-hidden .grid:not([data-count="1"]) .tile.local.corner-bl:not(.pinned),
+  .room.controls-hidden .grid:not([data-count="1"]) .tile.local.corner-br:not(.pinned) { bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .grid:not([data-count="1"]) .tile.local:not(.pinned) .label { display: none; }
+  .grid:not([data-count="1"]) .tile.local:not(.pinned) .avatar { width: 48px; height: 48px; font-size: 20px; }
+  .tile.local.dragging { transition: none; opacity: 0.85; }
+
+  /* A spotlight: the rest in a strip at the bottom. */
+  .grid.has-pinned .tile:not(.pinned) { border-radius: 10px; }
+
+  /* The bar over the picture, one row; hides itself (a tap on the picture brings it back). */
+  .controls {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; border-top: 0;
+    padding: 18px calc(8px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+    background: linear-gradient(180deg, transparent, rgba(2, 6, 12, 0.82) 45%);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    transition: transform 0.25s, opacity 0.25s;
+  }
+  .room.controls-hidden .controls { transform: translateY(100%); opacity: 0; pointer-events: none; }
+  .controls .buttons { flex-wrap: nowrap; }
+  .controls .buttons .secondary { display: none; }
+  #btn-more { display: inline-grid; }
+  .round { background: rgba(4, 11, 28, 0.6); }
+  .chat { inset: 0 0 var(--bar-h, 72px) 0; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Phone on its side: others side by side. */
+  .grid[data-count="3"]:not(.has-pinned) { grid-template-columns: 1fr 1fr; }
+  .grid[data-count="4"]:not(.has-pinned) { grid-template-columns: repeat(3, 1fr); }
+  .grid:not([data-count="1"]) .tile.local:not(.pinned) { width: min(22vw, 190px); aspect-ratio: 4 / 3; }
+  .grid:not(.has-pinned) .tile .label { bottom: calc(var(--bar-h, 72px) + 8px); }
 }
 
 /* ---- Chat ---- */

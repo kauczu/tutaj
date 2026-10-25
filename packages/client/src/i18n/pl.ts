@@ -178,6 +178,8 @@ export const pl = {
   'ctl.chat': 'Czat (C)',
   'ctl.overlay': 'Nakładka na grę',
   'ctl.pip': 'Obraz w obrazie (P)',
+  'ctl.more': 'Więcej',
+  'ctl.flip': 'Przełącz kamerę (przód / tył)',
   'pip.title': 'Tutaj — obraz w obrazie',
   'pip.waiting': 'Czekam na innych uczestników…',
   'ctl.record': 'Nagrywaj lokalnie',
