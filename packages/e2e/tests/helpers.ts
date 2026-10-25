@@ -1,4 +1,4 @@
-import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { expect, type Browser, type BrowserContext, type BrowserContextOptions, type Locator, type Page } from '@playwright/test';
 import { startServer, type RunningServer } from '@tutaj/server';
 import { WebSocket } from 'ws';
 
@@ -97,9 +97,9 @@ export class Participant {
   ) {}
 
   /** Opens the lobby in a fresh browser context (own storage, own fake camera), optionally with saved quality settings. */
-  static async open(browser: Browser, baseUrl: string, room: string, name: string, quality?: object): Promise<Participant> {
+  static async open(browser: Browser, baseUrl: string, room: string, name: string, quality?: object, device?: BrowserContextOptions): Promise<Participant> {
     // Polish interface (it follows the browser language); English is covered by i18n.spec.
-    const context = await browser.newContext({ locale: 'pl-PL' });
+    const context = await browser.newContext({ locale: 'pl-PL', ...device });
     const page = await context.newPage();
     await page.addInitScript(trafficProbe);
     if (quality) await page.addInitScript((q) => localStorage.setItem('tutaj:quality', q), JSON.stringify(quality));
