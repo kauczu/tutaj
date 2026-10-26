@@ -1,7 +1,7 @@
 {
   "name": "tutaj",
   "private": true,
-  "version": "0.7.7",
+  "version": "0.7.8",
   "description": "Wideorozmowy WebRTC dla 2-4 osób: P2P mesh, opcjonalny serwer, PWA i desktop.",
   "license": "AGPL-3.0-only",
   "workspaces": [
