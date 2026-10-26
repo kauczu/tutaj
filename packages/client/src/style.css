@@ -371,6 +371,13 @@ details[hidden] { display: none; }
   .grid:not(.has-pinned) .tile .label { bottom: calc(var(--bar-h, 72px) + 8px); }
 }
 
+/* ---- ?debug=1: video layout diagnostics ---- */
+.video-debug { position: fixed; z-index: 50; top: calc(4px + env(safe-area-inset-top)); left: 4px; right: 4px; padding: 6px;
+  border-radius: 8px; background: rgba(0, 0, 0, 0.75); color: #9fe; font: 10px/1.35 ui-monospace, Menlo, Consolas, monospace; }
+.video-debug pre { margin: 0 0 6px; white-space: pre-wrap; font: inherit; }
+.video-debug-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.video-debug-buttons button { padding: 6px 10px; border-radius: 6px; border: 1px solid #4a7; background: #123; color: #cfe; font: inherit; font-size: 12px; }
+
 /* ---- Chat ---- */
 .chat {
   grid-row: 1; grid-column: 2; width: 340px; display: flex; flex-direction: column; min-height: 0;

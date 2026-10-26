@@ -19,6 +19,7 @@ import { GameOverlay, type OverlaySettings } from './ui/overlay';
 import { PipWindow } from './ui/pip';
 import { settingsTabs } from './ui/settings-tabs';
 import { CompactLayout } from './ui/compact';
+import { videoDebug } from './ui/video-debug';
 import { renderQualityForm } from './ui/quality-form';
 import { REACTIONS, type Reaction } from './ui/reactions';
 import { toast } from './ui/toast';
@@ -838,6 +839,8 @@ export class Room {
     on('btn-settings', () => void this.openSettings());
     on('btn-leave', () => void this.leave());
     on('btn-invite', () => void this.copyInvite());
+    const closeDebug = videoDebug(this.grid);
+    if (closeDebug) this.cleanups.push(closeDebug);
     this.compact = new CompactLayout(this.grid, () => this.phoneItems());
     this.cleanups.push(this.grid.onChange(() => this.compact?.refresh()));
     this.cleanups.push(() => this.compact?.close());
