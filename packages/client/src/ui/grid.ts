@@ -9,7 +9,8 @@ const qualityLabel = (q: 'good' | 'fair' | 'poor' | 'unknown') => t(`tile.qualit
 
 export class Tile {
   readonly el: HTMLDivElement;
-  readonly video: HTMLVideoElement;
+  /** Replaced by refit() on iOS. */
+  video: HTMLVideoElement;
   private readonly avatar: HTMLDivElement;
   private readonly nameEl: HTMLSpanElement;
   private readonly micEl: HTMLSpanElement;
@@ -59,16 +60,23 @@ export class Tile {
   }
 
   /**
-   * iOS (WebKit) stops scaling the picture (object-fit) when the audio session changes, e.g. the mic
-   * re-opened for studio audio: it shrinks to a small picture in the middle of the tile until the phone
-   * is rotated. Attaching the stream to the player again fixes it (checked on an iPhone).
+   * iOS (WebKit): when the audio session changes (e.g. the mic re-opened for studio audio) the camera
+   * restarts and the player keeps the picture's old, rotated geometry — a small picture in the middle
+   * of the tile until the phone is rotated. Re-attaching the stream to the same player does not help
+   * (checked on an iPhone); a new player does.
    */
   refit(): void {
-    const v = this.video;
-    const stream = v.srcObject;
+    const old = this.video;
+    const stream = old.srcObject;
     if (!stream) return;
-    v.srcObject = null;
+    const v = h('video');
+    v.autoplay = true;
+    v.playsInline = true;
+    v.muted = old.muted;
     v.srcObject = stream;
+    old.replaceWith(v);
+    old.srcObject = null;
+    this.video = v;
     void v.play().catch(() => {});
   }
 

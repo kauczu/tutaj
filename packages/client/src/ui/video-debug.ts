@@ -52,17 +52,16 @@ export function videoDebug(grid: Grid): (() => void) | null {
         v.pause();
         void v.play().catch(() => {});
       }),
-      button('5 za 3 s', (v) => {
-        setTimeout(() => {
-          const s = v.srcObject;
-          v.srcObject = null;
-          v.srcObject = s;
-          void v.play().catch(() => {});
-          note('5 wykonane');
-        }, 3000);
-      }),
+      h('button', { text: '5 nowy odtwarzacz' }),
     ),
   );
+  const b5 = panel.querySelector<HTMLButtonElement>('.video-debug-buttons button:last-child')!;
+  b5.type = 'button';
+  b5.onclick = (e) => {
+    e.stopPropagation();
+    grid.all().forEach((t) => t.refit());
+    note('5 nowy odtwarzacz');
+  };
   document.body.append(panel);
   const tick = () => {
     const lines = videos().map(({ name, local, v }) => {
