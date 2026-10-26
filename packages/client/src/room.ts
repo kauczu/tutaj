@@ -778,6 +778,7 @@ export class Room {
 
   private onLocalMediaChange(): void {
     this.localTile.setStream(this.media.previewStream());
+    this.grid.refitSoon();
     this.speaking.watch(LOCAL_ID, this.media.audioTrack);
     void prefersH264(this.media.quality).then((v) => {
       this.h264 = v;
@@ -875,6 +876,15 @@ export class Room {
     };
     document.addEventListener('keydown', onKey);
     this.cleanups.push(() => document.removeEventListener('keydown', onKey));
+
+    // iOS re-creates video layers when the audio route changes (headphones, Bluetooth) or the tab returns.
+    const refit = () => this.grid.refitSoon();
+    navigator.mediaDevices?.addEventListener?.('devicechange', refit);
+    document.addEventListener('visibilitychange', refit);
+    this.cleanups.push(() => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', refit);
+      document.removeEventListener('visibilitychange', refit);
+    });
 
     const onHide = () => this.signaling.send({ type: 'leave' });
     window.addEventListener('pagehide', onHide);
