@@ -779,7 +779,7 @@ export class Room {
 
   private onLocalMediaChange(): void {
     this.localTile.setStream(this.media.previewStream());
-    this.grid.refitSoon();
+    this.grid.refitSoon('zmiana mikrofonu/kamery');
     this.speaking.watch(LOCAL_ID, this.media.audioTrack);
     void prefersH264(this.media.quality).then((v) => {
       this.h264 = v;
@@ -881,12 +881,16 @@ export class Room {
     this.cleanups.push(() => document.removeEventListener('keydown', onKey));
 
     // iOS re-creates video layers when the audio route changes (headphones, Bluetooth) or the tab returns.
-    const refit = () => document.visibilityState === 'visible' && this.grid.refitSoon();
-    navigator.mediaDevices?.addEventListener?.('devicechange', refit);
-    document.addEventListener('visibilitychange', refit);
+    const onDevices = () => this.grid.refitSoon('zmiana urządzeń audio');
+    const onVisible = () => document.visibilityState === 'visible' && this.grid.refitSoon('powrót do karty');
+    const onSettingsClosed = () => this.grid.refitSoon('zamknięto ustawienia', [100, 1000]);
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDevices);
+    document.addEventListener('visibilitychange', onVisible);
+    $('settings').addEventListener('close', onSettingsClosed);
     this.cleanups.push(() => {
-      navigator.mediaDevices?.removeEventListener?.('devicechange', refit);
-      document.removeEventListener('visibilitychange', refit);
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onDevices);
+      document.removeEventListener('visibilitychange', onVisible);
+      $('settings').removeEventListener('close', onSettingsClosed);
     });
 
     const onHide = () => this.signaling.send({ type: 'leave' });

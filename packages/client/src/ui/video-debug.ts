@@ -14,8 +14,10 @@ export function videoDebug(grid: Grid): (() => void) | null {
   const log: string[] = [];
   const note = (s: string) => {
     log.unshift(`${new Date().toLocaleTimeString()} ${s}`);
-    log.length = Math.min(log.length, 4);
+    log.length = Math.min(log.length, 8);
   };
+  const onNote = (e: Event) => note((e as CustomEvent<string>).detail);
+  window.addEventListener('tutaj:debug', onNote);
   const button = (label: string, fn: (v: HTMLVideoElement) => void) => {
     const b = h('button', { text: label });
     b.type = 'button';
@@ -64,6 +66,7 @@ export function videoDebug(grid: Grid): (() => void) | null {
   const timer = window.setInterval(tick, 500);
   tick();
   return () => {
+    window.removeEventListener('tutaj:debug', onNote);
     clearInterval(timer);
     panel.remove();
   };

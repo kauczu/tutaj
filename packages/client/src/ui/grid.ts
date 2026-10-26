@@ -123,6 +123,9 @@ export class Tile {
   }
 }
 
+/** A line for the ?debug=1 panel. */
+const debugNote = (text: string) => window.dispatchEvent(new CustomEvent('tutaj:debug', { detail: text }));
+
 /** iPhone, iPad (also iPadOS asking for desktop sites): every browser there is WebKit. */
 const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -203,14 +206,20 @@ export class Grid {
     return [...this.tiles.values()];
   }
 
-  /** See Tile.refit (iPhone/iPad only): after the mic or camera was re-opened, once the audio session settles. */
-  refitSoon(): void {
+  /**
+   * See Tile.refit (iPhone/iPad only): after the mic or camera was re-opened, once the audio session
+   * settles — and again when the settings close, since a picture covered by the dialog is not fixed.
+   */
+  refitSoon(why: string, delays = [700, 2000, 4000]): void {
     if (!IOS) return;
-    clearTimeout(this.refitTimers[0]);
-    clearTimeout(this.refitTimers[1]);
-    this.refitTimers = [700, 2000].map((delay) => window.setTimeout(() => this.tiles.forEach((t) => t.refit()), delay));
+    debugNote(`${why} → odświeżę za ${delays.join('/')} ms`);
+    for (const delay of delays) {
+      window.setTimeout(() => {
+        debugNote(`odświeżenie (${why}, ${delay} ms)`);
+        this.tiles.forEach((t) => t.refit());
+      }, delay);
+    }
   }
-  private refitTimers: number[] = [];
 
   /** Compact layout: part of the big picture (not our floating camera, not the strip under a spotlight). */
   private isMain(tile: Tile): boolean {
