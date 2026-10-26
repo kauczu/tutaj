@@ -34,11 +34,26 @@ test('help: from the lobby footer, with F1 and from the settings; desktop parts 
 
   await page.locator('#lobby-footer').getByRole('button', { name: 'Pomoc' }).click();
   await expect(help).toBeVisible();
-  await expect(help.locator('h3')).toHaveText(['Rozpoczęcie rozmowy', 'W trakcie rozmowy', 'Gospodarz pokoju 👑', 'Jakość obrazu i dźwięku', 'Prywatność i szyfrowanie', 'Gdy coś nie działa']);
+  await expect(help.locator('h3')).toHaveText([
+    'Jak zacząć',
+    'W trakcie rozmowy',
+    'Gospodarz pokoju 👑',
+    'Jakość obrazu i dźwięku',
+    'Prywatność i szyfrowanie',
+    'Klucz właściciela serwera',
+    'Gdy coś nie działa',
+  ]);
+  await expect(help.locator('ol.steps li')).toHaveCount(4);
+  await expect(help).toContainText('deploy/.env');
   // Plain browser: no overlay section, no desktop menu hint.
   await expect(help).not.toContainText('nakładka');
   await help.getByRole('button', { name: 'Zamknij' }).click();
   await expect(help).toBeHidden();
+
+  // The quiet pointer under "Join" opens the same guide.
+  await page.getByRole('button', { name: 'Pierwszy raz? Jak zacząć' }).click();
+  await expect(help.locator('h3').first()).toHaveText('Jak zacząć');
+  await help.getByRole('button', { name: 'Zamknij' }).click();
 
   await ania.submitJoin();
   await expect(page.locator('#room-view')).toBeVisible();

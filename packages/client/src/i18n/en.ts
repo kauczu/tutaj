@@ -32,6 +32,7 @@ export const en: Record<Key, string> = {
   'lobby.badNameRoom': 'Enter your name and a room name (letters, digits, - and _).',
   'lobby.badServer': 'Invalid server address.',
   'lobby.help': 'Help',
+  'lobby.firstTime': 'First time? Getting started',
   'lobby.sourceCode': 'Source code: ',
   'lobby.brandRights': 'Name, logo and artwork: all rights reserved.',
   'lobby.versions': 'server v{server} · app v{app}',
@@ -83,7 +84,7 @@ export const en: Record<Key, string> = {
   'error.sfuTimeout': 'SFU: no response ({method})',
 
   // --- Room: events in chat / toasts ---
-  'room.ownerKey': 'Owner key recognised — the server limits do not apply to you.',
+  'room.ownerKey': 'Owner key recognised — the room and join limits do not apply to you.',
   'room.firstHere': 'You are the first one here — copy the invitation and send it to the others.',
   'room.joins': '{name} joins',
   'room.joinsCall': '{name} joins the call',

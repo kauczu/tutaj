@@ -27,7 +27,7 @@ test('English interface for an English browser; the choice in the lobby wins and
   await expect(page.locator('#btn-invite')).toHaveText('Copy invitation');
   await expect(page.locator('#chat-list li.system').first()).toHaveText('You are the first one here — copy the invitation and send it to the others.');
   await page.keyboard.press('F1');
-  await expect(page.locator('#help h3').first()).toHaveText('Starting a call');
+  await expect(page.locator('#help h3').first()).toHaveText('Getting started');
   await page.keyboard.press('Escape');
   await page.click('#btn-settings');
   await expect(page.locator('#tab-quality')).toHaveText('Quality');

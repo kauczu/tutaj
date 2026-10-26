@@ -32,6 +32,7 @@ export const pl = {
   'lobby.badNameRoom': 'Podaj imię i nazwę pokoju (litery, cyfry, - i _).',
   'lobby.badServer': 'Nieprawidłowy adres serwera.',
   'lobby.help': 'Pomoc',
+  'lobby.firstTime': 'Pierwszy raz? Jak zacząć',
   'lobby.sourceCode': 'Kod źródłowy: ',
   'lobby.brandRights': 'Nazwa, logo i grafika: wszelkie prawa zastrzeżone.',
   'lobby.versions': 'serwer v{server} · aplikacja v{app}',
@@ -83,7 +84,7 @@ export const pl = {
   'error.sfuTimeout': 'SFU: brak odpowiedzi ({method})',
 
   // --- Room: events in chat / toasts ---
-  'room.ownerKey': 'Rozpoznano klucz właściciela — limity serwera Cię nie dotyczą.',
+  'room.ownerKey': 'Rozpoznano klucz właściciela — limity pokoi i dołączeń Cię nie dotyczą.',
   'room.firstHere': 'Jesteś pierwszy w pokoju — skopiuj zaproszenie i wyślij je innym.',
   'room.joins': '{name} dołącza',
   'room.joinsCall': '{name} dołącza do rozmowy',

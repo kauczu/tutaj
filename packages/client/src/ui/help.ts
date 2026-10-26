@@ -8,6 +8,8 @@ type Block = HTMLElement | string;
 const section = (title: string, ...body: Block[]) => h('section', {}, h('h3', { text: title }), ...body);
 const p = (...parts: Block[]) => h('p', {}, ...parts);
 const list = (...items: Block[][]) => h('ul', {}, ...items.map((parts) => h('li', {}, ...parts)));
+const steps = (...items: Block[][]) => h('ol', { class: 'steps' }, ...items.map((parts) => h('li', {}, ...parts)));
+const code = (text: string) => h('code', { text });
 const b = (text: string) => h('strong', { text });
 const kbd = (text: string) => h('kbd', { text });
 
@@ -24,12 +26,19 @@ interface Context {
 function polish({ hotkeys, desktop }: Context): HTMLElement[] {
   return [
     section(
-      'Rozpoczęcie rozmowy',
+      'Jak zacząć',
+      steps(
+        ['Wpisz swoje ', b('imię'), '. Nazwę ', b('pokoju'), ' zostaw wylosowaną (↻ losuje nową) albo wpisz własną — np. umówioną ze znajomymi.'],
+        ['Kliknij ', b('Dołącz'), '. Przeglądarka zapyta o dostęp do kamery i mikrofonu — zezwól.'],
+        ['Zaproś innych: przycisk ', b('Kopiuj zaproszenie'), ' (na telefonie pod „⋯”) kopiuje link — wyślij go komunikatorem. Kto go otworzy, trafi do Twojego pokoju; może też wpisać tę samą nazwę pokoju.'],
+        ['Rozmawiajcie. Koniec rozmowy — czerwony przycisk ze słuchawką.'],
+      ),
+      p(b('Dobrze wiedzieć:')),
       list(
-        ['Wpisz ', b('imię'), ' i ', b('nazwę pokoju'), ', kliknij ', b('Dołącz'), '. Imię i ostatni pokój są zapamiętywane.'],
-        ['W pokoju ', b('Kopiuj zaproszenie'), ' daje link do wysłania innym — kto go otworzy, trafi do tego pokoju.'],
-        ['W pokoju mogą być ', b('maks. 4 osoby'), '. Hasło pokoju ustala pierwsza osoba (lobby → „Urządzenia, jakość i ustawienia zaawansowane”).'],
-        ['Kamera i mikrofon włączają się dopiero po dołączeniu i wyłączają po rozłączeniu. Przyciski pod podglądem wybierają, z czym dołączysz (wybór jest zapamiętywany); „Włącz podgląd” pozwala wcześniej sprawdzić obraz i dźwięk — wyłącza się sam, gdy przejdziesz do innej karty. Język interfejsu zmienisz w ustawieniach zaawansowanych.'],
+        ['Do pokoju może wejść każdy, kto zna jego nazwę — dlatego losowa jest trudna do zgadnięcia. Możesz też ustawić ', b('hasło pokoju'), ' (lobby → „Urządzenia, jakość i ustawienia zaawansowane”; ustala je pierwsza osoba).'],
+        ['W pokoju mogą być ', b('maks. 4 osoby'), '. Imię i ostatni pokój są zapamiętywane.'],
+        ['Kamera i mikrofon włączają się dopiero po dołączeniu i wyłączają po rozłączeniu. Przyciski pod podglądem wybierają, z czym dołączysz (wybór jest zapamiętywany); „Włącz podgląd” pozwala wcześniej sprawdzić obraz i dźwięk.'],
+        ['Język interfejsu zmienisz w ustawieniach zaawansowanych lobby. Ta pomoc jest zawsze pod klawiszem ', kbd('F1'), ' i w Ustawieniach.'],
       ),
     ),
     section(
@@ -101,6 +110,18 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
         ]
       : []),
     section(
+      'Klucz właściciela serwera',
+      p('Dotyczy tylko osoby, która prowadzi serwer Tutaj (np. postawiła go u siebie). Zwykli uczestnicy go nie potrzebują — rozmowy działają bez niego.'),
+      list(
+        [b('Skąd go wziąć'), ': skrypt instalacyjny serwera wypisuje go na końcu instalacji. Jest też zapisany na serwerze w pliku ', code('deploy/.env'), ' (zmienna ', code('OWNER_KEY'), '), np. ', code('grep OWNER_KEY ~/tutaj/deploy/.env'), '. Na o.tutaj.eu.org ma go tylko właściciel tego serwera.'],
+        [b('Gdzie wpisać'), ': w lobby, przed dołączeniem — „Urządzenia, jakość i ustawienia zaawansowane” → „Klucz właściciela serwera”. Zostaje zapamiętany w tej przeglądarce lub aplikacji. Po dołączeniu zobaczysz komunikat „Rozpoznano klucz właściciela”; błędny klucz niczego nie psuje — po prostu nic nie zmienia.'],
+        [b('Co daje'), ': zdejmuje limity, którymi serwer chroni się przed nadużyciem — liczbę otwartych pokoi z jednego adresu (domyślnie 5) i dołączeń na minutę (30) — oraz wydłuża ważność dostępu do przekaźnika TURN z 4 do 24 godzin, więc długie rozmowy w trudnych sieciach się nie urwą.'],
+        [b('Kiedy warto'), ': gdy zobaczysz „Masz już otwartą maksymalną liczbę pokoi” albo „Za dużo prób” (np. kilka osób z jednej sieci domowej, testy) albo przed rozmową dłuższą niż 4 godziny.'],
+        [b('Czego nie daje'), ': nie czyni Cię gospodarzem pokoju, nie omija hasła, blokady pokoju, limitu 4 osób ani usunięcia z pokoju i nie daje dostępu do cudzych rozmów (są szyfrowane end-to-end). Nie zdejmuje też limitu jednoczesnych połączeń z jednego adresu (20) — to robi wpis ', code('TRUSTED_IPS'), ' na serwerze.'],
+        [b('Ostrożnie'), ': nie wpisuj go na cudzym komputerze. Jeśli wycieknie, zmień ', code('OWNER_KEY'), ' w ', code('deploy/.env'), ' i uruchom ', code('sudo docker compose up -d'), ' w katalogu ', code('deploy'), '.'],
+      ),
+    ),
+    section(
       'Gdy coś nie działa',
       list(
         [b('Brak obrazu z kamery / „urządzenie zajęte”'), ' — zamknij inne programy, które jej używają (Teams, Discord, OBS).'],
@@ -118,12 +139,19 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
 function english({ hotkeys, desktop }: Context): HTMLElement[] {
   return [
     section(
-      'Starting a call',
+      'Getting started',
+      steps(
+        ['Enter your ', b('name'), '. Keep the random ', b('room'), ' name (↻ draws a new one) or type your own — e.g. one agreed with your friends.'],
+        ['Click ', b('Join'), '. The browser asks for the camera and microphone — allow them.'],
+        ['Invite others: ', b('Copy invitation'), ' (on a phone under “⋯”) copies a link — send it via a messenger. Whoever opens it lands in your room; they can also type the same room name.'],
+        ['Talk. To end the call, use the red button with the handset.'],
+      ),
+      p(b('Good to know:')),
       list(
-        ['Enter your ', b('name'), ' and a ', b('room name'), ', click ', b('Join'), '. Your name and the last room are remembered.'],
-        ['In the room, ', b('Copy invitation'), ' gives you a link to send — whoever opens it lands in the same room.'],
-        ['A room holds ', b('up to 4 people'), '. The first person sets the room password (lobby → “Devices, quality and advanced settings”).'],
-        ['The camera and microphone turn on only when you join and off when you hang up. The buttons under the preview choose what you join with (the choice is remembered); “Start preview” lets you check picture and sound first — it stops by itself when you switch to another tab. The interface language is in the advanced settings.'],
+        ['Anyone who knows a room’s name can enter it — that is why the random one is hard to guess. You can also set a ', b('room password'), ' (lobby → “Devices, quality and advanced settings”; the first person sets it).'],
+        ['A room holds ', b('up to 4 people'), '. Your name and the last room are remembered.'],
+        ['The camera and microphone turn on only when you join and off when you hang up. The buttons under the preview choose what you join with (the choice is remembered); “Start preview” lets you check picture and sound first.'],
+        ['The interface language is in the lobby’s advanced settings. This help is always under ', kbd('F1'), ' and in the Settings.'],
       ),
     ),
     section(
@@ -194,6 +222,18 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
           ),
         ]
       : []),
+    section(
+      'Server owner key',
+      p('Only for the person who runs a Tutaj server (e.g. set one up themselves). Other participants do not need it — calls work without it.'),
+      list(
+        [b('Where to get it'), ': the server install script prints it at the end of the installation. It is also stored on the server in ', code('deploy/.env'), ' (the ', code('OWNER_KEY'), ' variable), e.g. ', code('grep OWNER_KEY ~/tutaj/deploy/.env'), '. On o.tutaj.eu.org only that server’s owner has it.'],
+        [b('Where to enter it'), ': in the lobby, before joining — “Devices, quality and advanced settings” → “Server owner key”. It is remembered in this browser or app. After joining you will see “Owner key recognised”; a wrong key breaks nothing — it simply changes nothing.'],
+        [b('What it gives'), ': lifts the limits the server uses against abuse — open rooms per address (5 by default) and joins per minute (30) — and extends access to the TURN relay from 4 to 24 hours, so long calls on difficult networks do not drop.'],
+        [b('When it helps'), ': when you see “You already have the maximum number of rooms open” or “Too many attempts” (e.g. several people on one home network, testing), or before a call longer than 4 hours.'],
+        [b('What it does not give'), ': it does not make you the room host, does not bypass a room password, a locked room, the 4-person limit or being removed, and gives no access to other people’s calls (they are end-to-end encrypted). Nor does it lift the limit of simultaneous connections per address (20) — ', code('TRUSTED_IPS'), ' on the server does that.'],
+        [b('Careful'), ': do not enter it on someone else’s computer. If it leaks, change ', code('OWNER_KEY'), ' in ', code('deploy/.env'), ' and run ', code('sudo docker compose up -d'), ' in the ', code('deploy'), ' directory.'],
+      ),
+    ),
     section(
       'When something does not work',
       list(

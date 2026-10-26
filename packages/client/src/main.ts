@@ -514,6 +514,7 @@ document.addEventListener('keydown', (e) => {
   void showHelp();
 });
 $('open-help').addEventListener('click', () => void showHelp());
+$('getting-started').addEventListener('click', () => void showHelp());
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});

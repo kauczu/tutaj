@@ -440,6 +440,12 @@ dialog.settings-dialog { width: min(900px, calc(100% - 32px)); }
 .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dialog-head .ghost { font-size: 13px; padding: 6px 14px; }
 .lobby-footer .link { background: none; border: 0; padding: 0; font: inherit; color: var(--glow); cursor: pointer; }
+/* A quiet pointer to the guide, under "Join". */
+.first-steps { margin: -4px 0 0; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.first-steps .link { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); cursor: pointer; }
+.first-steps .link:hover { color: var(--glow); text-decoration: underline; }
+.first-steps kbd { font-size: 11px; padding: 0 5px; opacity: 0.8; }
+@media (hover: none) { .first-steps kbd { display: none; } }
 .lobby-footer .link:hover { text-decoration: underline; }
 /* ---- Help ---- */
 dialog.help-dialog { width: min(680px, calc(100% - 32px)); }
@@ -450,6 +456,10 @@ dialog.help-dialog { width: min(680px, calc(100% - 32px)); }
 .help-body p { margin: 6px 0; }
 .help-body ul { margin: 6px 0; padding-left: 20px; display: grid; gap: 4px; }
 .help-body strong { color: var(--text); font-weight: 600; }
+.help-body ol.steps { margin: 6px 0; padding-left: 22px; display: grid; gap: 6px; }
+.help-body ol.steps li { color: var(--text); }
+.help-body code { font: 12px ui-monospace, 'Cascadia Mono', Consolas, monospace; padding: 1px 5px; border-radius: 5px;
+  background: rgba(16, 31, 72, 0.6); color: var(--text); word-break: break-word; }
 .help-body li, .help-body p { color: var(--muted); }
 table.keys { border-collapse: collapse; margin: 4px 0; }
 table.keys td { padding: 3px 12px 3px 0; color: var(--muted); }
