@@ -69,8 +69,12 @@ if [[ -n "$info" ]]; then
 else
   warn "Aplikacja nie odpowiada — sprawdź: cd $DIR && docker compose logs tutaj"
 fi
-if docker compose logs tutaj 2>/dev/null | grep -qE 'SFU +[0-9]'; then
-  echo "SFU: działa ($(docker compose logs tutaj | grep -oE 'SFU +[0-9.:]+' | tail -1 | tr -s ' '))"
-else
+# The app itself says whether its SFU is up. (Not `docker compose logs | grep -q`: with pipefail, grep -q
+# quitting early breaks the pipe and the check failed now and then although the SFU was running.)
+if grep -q '"sfu":true' <<<"$info"; then
+  logs="$(docker compose logs tutaj 2>/dev/null || true)"
+  addr="$(grep -oE 'SFU +[0-9.:]+' <<<"$logs" | tail -1 | tr -s ' ' || true)"
+  echo "SFU: działa${addr:+ (${addr#SFU })}"
+elif [[ -n "$info" ]]; then
   warn "SFU nie wystartowało — sprawdź: cd $DIR && docker compose logs tutaj"
 fi
