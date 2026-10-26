@@ -119,3 +119,31 @@ test('phone with three: the two others share the screen', async ({ browser }) =>
   expect(await area(ania.page.locator('.tile.local'))).toBeLessThan(390 * 844 * 0.1);
   await shot(ania.page, 'phone-three');
 });
+
+test('iPhone: after the mic is re-opened (studio audio) the pictures are attached to their players again', async ({ browser }) => {
+  // WebKit on iOS stops scaling the picture after an audio session change; re-attaching the stream fixes it.
+  const IPHONE = {
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+  };
+  const bartek = await Participant.join(browser, srv.url, 'iphone', 'Bartek');
+  const ania = await Participant.open(browser, srv.url, 'iphone', 'Ania', undefined, IPHONE);
+  people.push(bartek, ania);
+  await ania.submitJoin();
+  await ania.expectVideoFrom('Bartek');
+  await ania.page.evaluate(() => {
+    (window as unknown as { __attached: number }).__attached = 0;
+    document.addEventListener('loadstart', () => (window as unknown as { __attached: number }).__attached++, true);
+  });
+  await ania.page.locator('#btn-more').tap();
+  await ania.page.locator('#more-menu').getByRole('menuitem', { name: 'Ustawienia' }).tap();
+  await ania.page.locator('#tab-quality').tap();
+  await ania.page.selectOption('#quality-room-audio', 'studio');
+  // Both pictures (own and Bartek's), twice: once the audio session has settled.
+  await expect.poll(() => ania.page.evaluate(() => (window as unknown as { __attached: number }).__attached), { timeout: 6000 }).toBeGreaterThanOrEqual(4);
+  await ania.page.locator('#settings button[value="close"]').tap();
+  await ania.expectVideoFrom('Bartek');
+});

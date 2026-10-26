@@ -881,7 +881,7 @@ export class Room {
     this.cleanups.push(() => document.removeEventListener('keydown', onKey));
 
     // iOS re-creates video layers when the audio route changes (headphones, Bluetooth) or the tab returns.
-    const refit = () => this.grid.refitSoon();
+    const refit = () => document.visibilityState === 'visible' && this.grid.refitSoon();
     navigator.mediaDevices?.addEventListener?.('devicechange', refit);
     document.addEventListener('visibilitychange', refit);
     this.cleanups.push(() => {

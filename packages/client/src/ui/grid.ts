@@ -31,8 +31,6 @@ export class Tile {
     this.video.autoplay = true;
     this.video.playsInline = true;
     this.video.muted = local; // never play our own mic back
-    // New picture size (another camera, a rotated phone): make WebKit fit it again.
-    this.video.addEventListener('resize', () => this.refit());
     this.avatar = h('div', { class: 'avatar' });
     this.nameEl = h('span', { class: 'name' });
     this.micEl = h('span', { class: 'mic-off', title: t('tile.muted') });
@@ -61,21 +59,17 @@ export class Tile {
   }
 
   /**
-   * iOS (WebKit) sometimes stops applying object-fit after the audio session changes (e.g. the mic
-   * re-opened for studio audio): the picture shrinks to its own size in the middle of the tile until
-   * the video's box changes size (as when the phone is rotated). Change its size and fit for one frame,
-   * so WebKit sets the picture's scaling again.
+   * iOS (WebKit) stops scaling the picture (object-fit) when the audio session changes, e.g. the mic
+   * re-opened for studio audio: it shrinks to a small picture in the middle of the tile until the phone
+   * is rotated. Attaching the stream to the player again fixes it (checked on an iPhone).
    */
   refit(): void {
     const v = this.video;
-    v.style.width = 'calc(100% - 1px)';
-    v.style.objectFit = 'fill';
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        v.style.width = '';
-        v.style.objectFit = '';
-      }),
-    );
+    const stream = v.srcObject;
+    if (!stream) return;
+    v.srcObject = null;
+    v.srcObject = stream;
+    void v.play().catch(() => {});
   }
 
   get stream(): MediaStream | null {
@@ -128,6 +122,9 @@ export class Tile {
     this.onChange();
   }
 }
+
+/** iPhone, iPad (also iPadOS asking for desktop sites): every browser there is WebKit. */
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 /**
  * Video grid. Click a tile to spotlight it, double-click for fullscreen.
@@ -206,10 +203,14 @@ export class Grid {
     return [...this.tiles.values()];
   }
 
-  /** See Tile.refit: after the microphone or camera was re-opened, once the audio session settles. */
+  /** See Tile.refit (iPhone/iPad only): after the mic or camera was re-opened, once the audio session settles. */
   refitSoon(): void {
-    for (const delay of [300, 1000, 2500]) setTimeout(() => this.tiles.forEach((t) => t.refit()), delay);
+    if (!IOS) return;
+    clearTimeout(this.refitTimers[0]);
+    clearTimeout(this.refitTimers[1]);
+    this.refitTimers = [700, 2000].map((delay) => window.setTimeout(() => this.tiles.forEach((t) => t.refit()), delay));
   }
+  private refitTimers: number[] = [];
 
   /** Compact layout: part of the big picture (not our floating camera, not the strip under a spotlight). */
   private isMain(tile: Tile): boolean {
