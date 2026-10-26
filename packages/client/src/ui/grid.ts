@@ -131,11 +131,8 @@ export class Tile {
   }
 }
 
-/** A line for the ?debug=1 panel. */
-const debugNote = (text: string) => window.dispatchEvent(new CustomEvent('tutaj:debug', { detail: text }));
-
 /** iPhone, iPad (also iPadOS asking for desktop sites): every browser there is WebKit. */
-export const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 /**
  * Video grid. Click a tile to spotlight it, double-click for fullscreen.
@@ -214,20 +211,10 @@ export class Grid {
     return [...this.tiles.values()];
   }
 
-  /**
-   * See Tile.refit (iPhone/iPad only): after the mic or camera was re-opened, once the audio session
-   * settles — and again when the settings close, since a picture covered by the dialog is not fixed.
-   */
-  refitSoon(why: string, delays = [700, 2000, 4000]): void {
+  /** See Tile.refit (iPhone/iPad only): after the mic or camera was re-opened, as the camera restarts. */
+  refitSoon(): void {
     if (!IOS) return;
-    debugNote(`${why} → odświeżę za ${delays.join('/')} ms`);
-    for (const delay of delays) window.setTimeout(() => this.refitNow(`${why}, ${delay} ms`), delay);
-  }
-
-  /** Right now — inside a tap, iOS may only rebuild the pictures in reaction to the user. */
-  refitNow(why: string): void {
-    debugNote(`odświeżenie (${why})`);
-    this.tiles.forEach((t) => t.refit());
+    for (const delay of [700, 2000, 4000]) window.setTimeout(() => this.tiles.forEach((t) => t.refit()), delay);
   }
 
   /** Compact layout: part of the big picture (not our floating camera, not the strip under a spotlight). */
