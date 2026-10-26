@@ -52,6 +52,15 @@ export function videoDebug(grid: Grid): (() => void) | null {
         v.pause();
         void v.play().catch(() => {});
       }),
+      button('5 za 3 s', (v) => {
+        setTimeout(() => {
+          const s = v.srcObject;
+          v.srcObject = null;
+          v.srcObject = s;
+          void v.play().catch(() => {});
+          note('5 wykonane');
+        }, 3000);
+      }),
     ),
   );
   document.body.append(panel);

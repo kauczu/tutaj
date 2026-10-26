@@ -127,7 +127,7 @@ export class Tile {
 const debugNote = (text: string) => window.dispatchEvent(new CustomEvent('tutaj:debug', { detail: text }));
 
 /** iPhone, iPad (also iPadOS asking for desktop sites): every browser there is WebKit. */
-const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 /**
  * Video grid. Click a tile to spotlight it, double-click for fullscreen.
@@ -213,12 +213,13 @@ export class Grid {
   refitSoon(why: string, delays = [700, 2000, 4000]): void {
     if (!IOS) return;
     debugNote(`${why} → odświeżę za ${delays.join('/')} ms`);
-    for (const delay of delays) {
-      window.setTimeout(() => {
-        debugNote(`odświeżenie (${why}, ${delay} ms)`);
-        this.tiles.forEach((t) => t.refit());
-      }, delay);
-    }
+    for (const delay of delays) window.setTimeout(() => this.refitNow(`${why}, ${delay} ms`), delay);
+  }
+
+  /** Right now — inside a tap, iOS may only rebuild the pictures in reaction to the user. */
+  refitNow(why: string): void {
+    debugNote(`odświeżenie (${why})`);
+    this.tiles.forEach((t) => t.refit());
   }
 
   /** Compact layout: part of the big picture (not our floating camera, not the strip under a spotlight). */

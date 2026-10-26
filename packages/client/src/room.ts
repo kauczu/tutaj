@@ -17,6 +17,7 @@ import { setIcon } from './ui/icons';
 import { acceleratorFromEvent, formatAccelerator, type HotkeyName } from './ui/hotkeys';
 import { GameOverlay, type OverlaySettings } from './ui/overlay';
 import { PipWindow } from './ui/pip';
+import { IOS } from './ui/grid';
 import { settingsTabs } from './ui/settings-tabs';
 import { CompactLayout } from './ui/compact';
 import { videoDebug } from './ui/video-debug';
@@ -146,6 +147,8 @@ export class Room {
   /** Phone layout: others full screen, our camera floating, auto-hiding controls. */
   private compact: CompactLayout | null = null;
   private cameras = 0;
+  /** iOS: re-attach the pictures at the next tap (see Tile.refit). */
+  private refitOnTap = false;
   /** Browser only (the desktop app has the overlay): an always-on-top mini window. */
   private readonly pip: PipWindow | null;
   private readonly startedAt = Date.now();
@@ -780,6 +783,7 @@ export class Room {
   private onLocalMediaChange(): void {
     this.localTile.setStream(this.media.previewStream());
     this.grid.refitSoon('zmiana mikrofonu/kamery');
+    if (IOS) this.refitOnTap = true;
     this.speaking.watch(LOCAL_ID, this.media.audioTrack);
     void prefersH264(this.media.quality).then((v) => {
       this.h264 = v;
@@ -881,6 +885,14 @@ export class Room {
     this.cleanups.push(() => document.removeEventListener('keydown', onKey));
 
     // iOS re-creates video layers when the audio route changes (headphones, Bluetooth) or the tab returns.
+    // iOS: the pictures are fixed for sure only from a tap (closing the settings, touching the screen).
+    const onTap = () => {
+      if (!this.refitOnTap) return;
+      this.grid.refitNow('dotknięcie');
+      if (!document.querySelector('dialog[open]')) this.refitOnTap = false;
+    };
+    document.addEventListener('click', onTap, true);
+    this.cleanups.push(() => document.removeEventListener('click', onTap, true));
     const onDevices = () => this.grid.refitSoon('zmiana urządzeń audio');
     const onVisible = () => document.visibilityState === 'visible' && this.grid.refitSoon('powrót do karty');
     const onSettingsClosed = () => this.grid.refitSoon('zamknięto ustawienia', [100, 1000]);
