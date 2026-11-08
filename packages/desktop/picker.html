@@ -28,11 +28,17 @@
       }
       const list = document.getElementById('list');
       document.getElementById('cancel').onclick = () => window.picker.choose(null);
+      // Thumbnails come a moment later (see pickSource in main.mjs).
+      const images = new Map();
+      window.picker.onThumbnails((list) => {
+        for (const t of list) if (images.has(t.id)) images.get(t.id).src = t.thumbnail;
+      });
       window.picker.sources().then((sources) => {
         for (const s of sources) {
           const btn = document.createElement('button');
           const img = document.createElement('img');
-          img.src = s.thumbnail;
+          if (s.thumbnail) img.src = s.thumbnail;
+          images.set(s.id, img);
           const label = document.createElement('span');
           label.textContent = s.name;
           btn.append(img, label);

@@ -165,10 +165,14 @@ async function startEmbeddedServer() {
 
 // --- Screen-share picker ------------------------------------------------------------------
 
-/** A small window listing screens and windows to share. */
+/**
+ * A small window listing screens and windows to share. It opens with the names right away (listing is
+ * quick); thumbnails of every window take seconds, so they follow when ready.
+ */
 function pickSource(parent) {
   return new Promise(async (resolve) => {
-    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } });
+    const types = ['screen', 'window'];
+    const sources = await desktopCapturer.getSources({ types, thumbnailSize: { width: 0, height: 0 } });
     const picker = new BrowserWindow({
       parent,
       modal: true,
@@ -188,12 +192,14 @@ function pickSource(parent) {
       resolve(sources.find((s) => s.id === id) ?? null);
       if (!picker.isDestroyed()) picker.close();
     };
-    ipcMain.handle('picker:sources', () =>
-      sources.map((s) => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() })),
-    );
+    ipcMain.handle('picker:sources', () => sources.map((s) => ({ id: s.id, name: s.name, thumbnail: null })));
     ipcMain.on('picker:choose', (_e, id) => finish(id));
     picker.on('closed', () => finish(null));
     await picker.loadFile(join(here, 'picker.html'), { query: { lang: uiLang() } });
+    const thumbs = await desktopCapturer.getSources({ types, thumbnailSize: { width: 320, height: 180 } }).catch(() => []);
+    if (!done && !picker.isDestroyed()) {
+      picker.webContents.send('picker:thumbnails', thumbs.map((s) => ({ id: s.id, thumbnail: s.thumbnail.toDataURL() })));
+    }
   });
 }
 
