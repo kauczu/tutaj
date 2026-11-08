@@ -194,6 +194,17 @@ export class RemotePeer {
     await this.applyParams();
   }
 
+  /**
+   * WebRTC drops to the software encoder for good when the hardware one fails to restart (e.g. after the
+   * camera re-opened at another size) — until a new connection. Switching the codec away and back makes a
+   * new encoder, which tries the hardware again.
+   */
+  async rebuildEncoder(): Promise<void> {
+    if (!this.h264) return;
+    await this.setPreferH264(false);
+    await this.setPreferH264(true);
+  }
+
   /** Caps outgoing video bitrate — in a mesh our upload is shared by every peer. */
   async setMaxBitrate(bps: number): Promise<void> {
     this.maxBitrate = bps;

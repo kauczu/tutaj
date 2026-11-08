@@ -6,7 +6,7 @@ import { FileReceiver, MAX_FILE_SIZE, formatBytes, sendFile } from './files';
 import { LocalMedia, describeMediaError } from './media';
 import { parseAppMessage, type AppMessage, type PeerState } from './messages';
 import { RemotePeer, SendMeter, type SendStats } from './peer';
-import { MIN_VIDEO_BITRATE, SCREEN_BITRATE, isHighQuality, prefersH264, videoBudget, videoCap } from './quality';
+import { MIN_VIDEO_BITRATE, SCREEN_BITRATE, hasHardwareH264, isHighQuality, prefersH264, videoBudget, videoCap } from './quality';
 import { CallRecorder } from './recorder';
 import type { SfuSession } from './sfu';
 import { Signaling } from './signaling';
@@ -1149,7 +1149,9 @@ export class Room {
     try {
       await this.media.startScreen();
     } catch (e) {
-      if (!(e instanceof DOMException && e.name === 'NotAllowedError')) toast(t('media.screenProblem', { error: describeMediaError(e) }), 'error');
+      // Cancelled by the user: the browser says NotAllowedError; the desktop app's picker can only say AbortError.
+      const cancelled = e instanceof DOMException && (e.name === 'NotAllowedError' || (!!window.tutaj && e.name === 'AbortError'));
+      if (!cancelled) toast(t('media.screenProblem', { error: describeMediaError(e) }), 'error');
     }
   }
 
@@ -1309,12 +1311,35 @@ export class Room {
       const code = await safetyCode(p.pc).catch(() => null);
       if (code) this.codes.set(p.id, code);
     }
+    void this.watchEncoders();
     const report = await this.sfu?.sendStats().catch(() => null);
     this.sfuSend = report ? this.sfuMeter.sample(report) : null;
     this.updateEncoderBadge();
     this.sendQualityReport();
     if ($<HTMLDialogElement>('settings').open) this.renderStats();
   }
+
+  /**
+   * Hardware encoder watchdog (mesh): H.264 is meant to run on the GPU, but a connection that has been
+   * encoding on the CPU for ~10 s (5 stats rounds) gets a new encoder — at most 3 times per peer.
+   */
+  private async watchEncoders(): Promise<void> {
+    if (!this.h264 || (await hasHardwareH264()) !== true) return;
+    for (const p of this.peers.values()) {
+      const send = p.stats?.send;
+      const onCpu = !!send?.resolution && send.hardware === false && /h264/i.test(send.codec ?? '');
+      const w = this.encoderWatch.get(p.id) ?? { cpu: 0, rebuilt: 0 };
+      w.cpu = onCpu ? w.cpu + 1 : 0;
+      if (w.cpu >= 5 && w.rebuilt < 3) {
+        w.cpu = 0;
+        w.rebuilt++;
+        console.info(`[tutaj] encoder on the CPU for ${p.state.name}: rebuilding (${w.rebuilt}/3)`);
+        void p.rebuildEncoder();
+      }
+      this.encoderWatch.set(p.id, w);
+    }
+  }
+  private readonly encoderWatch = new Map<string, { cpu: number; rebuilt: number }>();
 
   /** GPU/CPU next to P2P/SFU: which encoder our camera video actually uses right now. */
   private updateEncoderBadge(): void {
