@@ -12,22 +12,39 @@
       button:hover, button:focus { border-color: #4d9aca; outline: none; }
       img { width: 100%; aspect-ratio: 16/9; object-fit: contain; background: #000; border-radius: 6px; display: block; }
       span { display: block; margin-top: 6px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .cancel { margin-top: 16px; padding: 8px 16px; }
+      .cancel { padding: 8px 16px; }
+      .foot { margin-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+      .sound { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+      .sound input { width: 18px; height: 18px; accent-color: #4d9aca; margin: 0; }
     </style>
   </head>
   <body>
     <h1 id="title">Co chcesz udostępnić?</h1>
     <div class="list" id="list"></div>
-    <button class="cancel" id="cancel">Anuluj</button>
+    <div class="foot">
+      <label class="sound"><input type="checkbox" id="sound" /> <span id="sound-label">Udostępnij też dźwięk komputera (bez dźwięku rozmowy)</span></label>
+      <button class="cancel" id="cancel">Anuluj</button>
+    </div>
     <script>
       if (new URLSearchParams(location.search).get('lang') === 'en') {
         document.documentElement.lang = 'en';
         document.title = 'Choose a screen or window';
         document.getElementById('title').textContent = 'What do you want to share?';
         document.getElementById('cancel').textContent = 'Cancel';
+        document.getElementById('sound-label').textContent = 'Share the computer’s sound too (without the call’s sound)';
       }
       const list = document.getElementById('list');
       document.getElementById('cancel').onclick = () => window.picker.choose(null);
+      // The sound choice is remembered for next time.
+      const sound = document.getElementById('sound');
+      try {
+        sound.checked = localStorage.getItem('tutaj:share-sound') === '1';
+      } catch {}
+      sound.onchange = () => {
+        try {
+          localStorage.setItem('tutaj:share-sound', sound.checked ? '1' : '0');
+        } catch {}
+      };
       // Thumbnails come a moment later (see pickSource in main.mjs).
       const images = new Map();
       window.picker.onThumbnails((list) => {
@@ -42,7 +59,7 @@
           const label = document.createElement('span');
           label.textContent = s.name;
           btn.append(img, label);
-          btn.onclick = () => window.picker.choose(s.id);
+          btn.onclick = () => window.picker.choose(s.id, sound.checked);
           list.append(btn);
         }
       });

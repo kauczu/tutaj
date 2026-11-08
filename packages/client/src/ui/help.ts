@@ -64,6 +64,7 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
         ['Czat przesyła też ', b('pliki'), ' (do 2 GB) — bezpośrednio między uczestnikami; przeciągnij plik do czatu lub użyj spinacza.'],
         ['Nowa wiadomość przy zamkniętym czacie: krótki dźwięk i dymek z treścią (gdy okno jest w tle — powiadomienie systemowe w aplikacji desktopowej). Dźwięk wyłączysz w Ustawieniach → Urządzenia.'],
         [b('Nagrywanie'), ' zapisuje rozmowę na Twoim komputerze (plik .webm); pozostali dostają informację w czacie.'],
+        [b('Ekran z dźwiękiem'), ': w aplikacji desktopowej zaznacz w oknie wyboru „Udostępnij też dźwięk komputera”, w Chrome/Edge — opcję udostępniania dźwięku. Rozmówcy usłyszą np. grę lub film (bez dźwięku samej rozmowy, więc nie usłyszą siebie); wyciszony mikrofon wycisza tylko Twój głos.'],
       ),
     ),
     section(
@@ -181,6 +182,7 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
         ['The chat also sends ', b('files'), ' (up to 2 GB) — directly between participants; drop a file into the chat or use the paperclip.'],
         ['A new message while the chat is closed: a short sound and a bubble with the text (with the window in the background — a system notification in the desktop app). Turn the sound off in Settings → Devices.'],
         [b('Recording'), ' saves the call on your computer (a .webm file); the others get a note in the chat.'],
+        [b('Screen with sound'), ': in the desktop app tick “Share the computer’s sound too” in the picker; in Chrome/Edge, the option to share audio. The others hear e.g. a game or a film (without the call’s own sound, so they don’t hear themselves); a muted microphone mutes only your voice.'],
       ),
     ),
     section(

@@ -1,6 +1,7 @@
 import { Emitter } from './emitter';
 import { AUDIO_BITRATE, loadQuality, micChanged, saveQuality, type QualitySettings } from './quality';
 import { t } from './i18n';
+import { ScreenAudioMix } from './screen-audio';
 
 type MediaEvents = {
   /** Outgoing audio or video track changed (device switch, camera toggle, screen share). */
@@ -53,6 +54,8 @@ export class LocalMedia extends Emitter<MediaEvents> {
   audioTrack: MediaStreamTrack | null = null;
   cameraTrack: MediaStreamTrack | null = null;
   screenTrack: MediaStreamTrack | null = null;
+  /** Screen shared with sound: its sound mixed with the microphone (see ScreenAudioMix). */
+  private screenMix: ScreenAudioMix | null = null;
   audioDeviceId: string | undefined;
   videoDeviceId: string | undefined;
   /** Which way the camera looks, when the device says (phones): the back camera is not mirrored. */
@@ -65,7 +68,13 @@ export class LocalMedia extends Emitter<MediaEvents> {
   quality: QualitySettings = loadQuality();
 
   get audioBitrate(): number {
-    return AUDIO_BITRATE[this.quality.audio];
+    // Game or film sound needs more than a voice does.
+    return this.screenMix ? Math.max(AUDIO_BITRATE[this.quality.audio], 128_000) : AUDIO_BITRATE[this.quality.audio];
+  }
+
+  /** The screen is being shared together with its sound. */
+  get sharingScreenAudio(): boolean {
+    return !!this.screenMix;
   }
 
   /** Applies new quality settings, re-opening the mic/camera when their capture settings change. */
@@ -79,7 +88,7 @@ export class LocalMedia extends Emitter<MediaEvents> {
   }
 
   get outgoingAudio(): MediaStreamTrack | null {
-    return this.audioTrack;
+    return this.screenMix?.track ?? this.audioTrack;
   }
 
   get outgoingVideo(): MediaStreamTrack | null {
@@ -128,6 +137,7 @@ export class LocalMedia extends Emitter<MediaEvents> {
     this.audioTrack?.stop();
     track.enabled = this.audioEnabled;
     this.audioTrack = track;
+    this.screenMix?.setMic(track);
     this.audioDeviceId = track.getSettings().deviceId ?? deviceId;
     this.emit('change', undefined);
   }
@@ -167,12 +177,16 @@ export class LocalMedia extends Emitter<MediaEvents> {
   async startScreen(): Promise<void> {
     const stream = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: { ideal: 15, max: 30 } },
-      audio: false,
+      // Sound only if the person ticks it in the picker. Never the call itself (others would hear
+      // themselves), and untouched: no voice processing on music or game sound.
+      audio: { restrictOwnAudio: true, echoCancellation: false, noiseSuppression: false, autoGainControl: false } as MediaTrackConstraints,
     });
     const track = stream.getVideoTracks()[0];
     track.contentHint = 'detail';
     track.addEventListener('ended', () => this.stopScreen());
     this.screenTrack = track;
+    const sound = stream.getAudioTracks()[0];
+    if (sound) this.screenMix = new ScreenAudioMix(this.audioTrack, sound);
     this.emit('change', undefined);
   }
 
@@ -180,10 +194,14 @@ export class LocalMedia extends Emitter<MediaEvents> {
     if (!this.screenTrack) return;
     this.screenTrack.stop();
     this.screenTrack = null;
+    this.screenMix?.stop();
+    this.screenMix = null;
     this.emit('change', undefined);
   }
 
   stop(): void {
+    this.screenMix?.stop();
+    this.screenMix = null;
     for (const t of [this.audioTrack, this.cameraTrack, this.screenTrack]) t?.stop();
     this.audioTrack = this.cameraTrack = this.screenTrack = null;
   }

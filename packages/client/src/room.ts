@@ -1195,6 +1195,7 @@ export class Room {
     if (this.media.sharingScreen) return this.media.stopScreen();
     try {
       await this.media.startScreen();
+      if (this.media.sharingScreenAudio) toast(t('room.screenWithSound'));
     } catch (e) {
       // Cancelled by the user: the browser says NotAllowedError; the desktop app's picker can only say AbortError.
       const cancelled = e instanceof DOMException && (e.name === 'NotAllowedError' || (!!window.tutaj && e.name === 'AbortError'));

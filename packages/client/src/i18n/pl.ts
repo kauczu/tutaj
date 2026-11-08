@@ -183,6 +183,7 @@ export const pl = {
   'ctl.echoOn': 'Usuwanie echa: włączone (E)',
   'ctl.echoOff': 'Usuwanie echa: wyłączone (E)',
   'room.echoOn': 'Usuwanie echa włączone',
+  'room.screenWithSound': 'Udostępniasz ekran razem z dźwiękiem (bez dźwięku rozmowy)',
   'room.echoOff': 'Usuwanie echa wyłączone',
   'chat.newFrom': '💬 {name}: {text}',
   'chat.notifyTitle': '{name} — nowa wiadomość w Tutaj',

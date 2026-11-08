@@ -184,16 +184,17 @@ function pickSource(parent) {
       webPreferences: { preload: join(here, 'picker-preload.cjs'), sandbox: true, contextIsolation: true },
     });
     let done = false;
-    const finish = (id) => {
+    const finish = (id, audio = false) => {
       if (done) return;
       done = true;
       ipcMain.removeHandler('picker:sources');
       ipcMain.removeAllListeners('picker:choose');
-      resolve(sources.find((s) => s.id === id) ?? null);
+      const source = sources.find((s) => s.id === id);
+      resolve(source ? { source, audio: audio === true } : null);
       if (!picker.isDestroyed()) picker.close();
     };
     ipcMain.handle('picker:sources', () => sources.map((s) => ({ id: s.id, name: s.name, thumbnail: null })));
-    ipcMain.on('picker:choose', (_e, id) => finish(id));
+    ipcMain.on('picker:choose', (_e, id, audio) => finish(id, audio));
     picker.on('closed', () => finish(null));
     await picker.loadFile(join(here, 'picker.html'), { query: { lang: uiLang() } });
     const thumbs = await desktopCapturer.getSources({ types, thumbnailSize: { width: 320, height: 180 } }).catch(() => []);
@@ -630,8 +631,9 @@ async function createWindow() {
     callback(trusted && ['media', 'display-capture', 'clipboard-sanitized-write', 'notifications', 'fullscreen'].includes(permission));
   });
   ses.setDisplayMediaRequestHandler(async (_request, callback) => {
-    const source = await pickSource(mainWindow);
-    if (source) callback({ video: source });
+    const picked = await pickSource(mainWindow);
+    // Sound: the whole computer's ("loopback"); the page asks without the app's own sound (restrictOwnAudio).
+    if (picked) callback({ video: picked.source, ...(picked.audio ? { audio: 'loopback' } : {}) });
     else callback({});
   });
 

@@ -183,6 +183,7 @@ export const en: Record<Key, string> = {
   'ctl.echoOn': 'Echo cancellation: on (E)',
   'ctl.echoOff': 'Echo cancellation: off (E)',
   'room.echoOn': 'Echo cancellation on',
+  'room.screenWithSound': 'You are sharing the screen with its sound (without the call’s sound)',
   'room.echoOff': 'Echo cancellation off',
   'chat.newFrom': '💬 {name}: {text}',
   'chat.notifyTitle': '{name} — new message in Tutaj',
