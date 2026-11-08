@@ -1,4 +1,8 @@
 FROM node:22-bookworm-slim AS build
+# mediasoup picks a prebuilt worker by the build host's kernel; the one for newer kernels needs a newer glibc
+# than Debian 12 has, and then mediasoup builds the worker from source — which needs these.
+RUN apt-get update  && apt-get install -y --no-install-recommends python3 python3-pip python-is-python3 make g++  && rm -rf /var/lib/apt/lists/*
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
