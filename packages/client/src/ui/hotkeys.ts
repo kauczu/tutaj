@@ -1,7 +1,7 @@
 // Global shortcuts of the desktop app: recording a key combination as an Electron accelerator.
 import { t } from '../i18n';
 
-export type HotkeyName = 'overlay' | 'mute' | 'window';
+export type HotkeyName = 'overlay' | 'mute' | 'window' | 'chat';
 export type Hotkeys = Record<HotkeyName, string>;
 
 const NAMED: Record<string, string> = {

@@ -21,7 +21,7 @@ declare global {
  * Stand-in for the desktop app's bridge (preload): the overlay logic of the web client is tested
  * in a plain browser; window placement, click-through and global shortcuts are the app's part.
  */
-function fakeDesktopBridge() {
+function fakeDesktopBridge(opts?: { app08?: boolean }) {
   const ov = (window.__ov = {
     calls: [] as unknown[][],
     hotkey: null as ((name: string) => void) | null,
@@ -31,6 +31,8 @@ function fakeDesktopBridge() {
     overlay: 'CommandOrControl+Shift+O',
     mute: 'CommandOrControl+Shift+M',
     window: 'CommandOrControl+Shift+H',
+    // App 0.8+: the chat shortcut, and the overlay can take the keyboard.
+    ...(opts?.app08 ? { chat: 'CommandOrControl+Shift+C' } : {}),
   };
   let hotkeys = { ...defaults };
   (window as unknown as { tutaj: unknown }).tutaj = {
@@ -41,6 +43,7 @@ function fakeDesktopBridge() {
       get: async () => ({ ...ov.settings, hotkeys, displays: [{ id: 1, label: 'Monitor', width: 1920, height: 1080, primary: true }] }),
       set: async (patch: Record<string, unknown>) => ({ ...Object.assign(ov.settings, patch) }),
       resize: async (w: number, h: number) => void ov.calls.push(['resize', w, h]),
+      ...(opts?.app08 ? { input: async (on: boolean) => void ov.calls.push(['input', on]) } : {}),
     },
     setInCall: async (on: boolean) => void ov.calls.push(['inCall', on]),
     setHotkey: async (name: string, accelerator: string | null) => {
@@ -206,4 +209,49 @@ test('desktop lobby: server block collapsed, server and app versions in the foot
   await expect(ania.page.locator('#help')).toContainText('pokazuje menu');
   await ania.page.keyboard.press('Escape');
   await expect(ania.page.locator('#lobby-footer')).toContainText(/serwer v\d+\.\d+\.\d+ · aplikacja v9\.9\.9/);
+});
+
+test('chat over the game: messages show on the overlay; the chat shortcut writes there (app 0.8+)', async ({ browser }) => {
+  const ania = await Participant.open(browser, srv.url, 'czat-gra', 'Ania');
+  people.push(ania);
+  await ania.page.addInitScript(fakeDesktopBridge, { app08: true });
+  await ania.page.reload();
+  await ania.page.fill('#name', 'Ania');
+  await ania.submitJoin();
+  const bartek = await Participant.join(browser, srv.url, 'czat-gra', 'Bartek');
+  people.push(bartek);
+  await ania.expectVideoFrom('Bartek');
+  const [overlay] = await Promise.all([ania.page.waitForEvent('popup'), ania.page.evaluate(() => window.__ov.hotkey?.('overlay'))]);
+  await expect(overlay.locator('.tile')).toHaveCount(1);
+
+  // Bartek writes: the message shows over the game (and the overlay grows to fit it).
+  await bartek.page.click('#btn-chat');
+  await bartek.page.fill('#chat-input', 'Idziemy na środek?');
+  await bartek.page.keyboard.press('Enter');
+  await expect(overlay.locator('.msg')).toHaveText('Bartek:Idziemy na środek?');
+
+  // The chat shortcut: the overlay takes the keyboard, Ania writes, Enter sends and gives it back.
+  await ania.page.evaluate(() => window.__ov.hotkey?.('chat'));
+  await expect.poll(() => ania.page.evaluate(() => window.__ov.calls)).toContainEqual(['input', true]);
+  const input = overlay.locator('.chat-input input');
+  await expect(input).toBeFocused();
+  await input.fill('Tak, osłaniam');
+  await input.press('Enter');
+  await expect(bartek.page.locator('#chat-list')).toContainText('Tak, osłaniam');
+  await expect(overlay.locator('.chat-input')).toHaveCount(0);
+  await expect(overlay.locator('.msg.self')).toHaveText('Ania:Tak, osłaniam');
+  await expect.poll(() => ania.page.evaluate(() => window.__ov.calls)).toContainEqual(['input', false]);
+
+  // Esc cancels without sending.
+  await ania.page.evaluate(() => window.__ov.hotkey?.('chat'));
+  await overlay.locator('.chat-input input').fill('nie wysyłaj');
+  await overlay.locator('.chat-input input').press('Escape');
+  await expect(overlay.locator('.chat-input')).toHaveCount(0);
+  await ania.page.waitForTimeout(500);
+  await expect(bartek.page.locator('#chat-list')).not.toContainText('nie wysyłaj');
+
+  // The shortcut can be changed like the others.
+  await ania.page.click('#btn-settings');
+  await ania.page.click('#tab-overlay');
+  await expect(ania.page.locator('#hotkey-chat')).toHaveText('Ctrl+Shift+C');
 });

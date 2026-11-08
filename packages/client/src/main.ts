@@ -34,22 +34,24 @@ interface DesktopBridge {
     get(): Promise<
       OverlaySettings & {
         displays: { id: number; label: string; width: number; height: number; primary: boolean }[];
-        hotkeys: Record<'overlay' | 'mute' | 'window', string>;
+        hotkeys: Record<'overlay' | 'mute' | 'window' | 'chat', string>;
       }
     >;
     set(patch: Partial<OverlaySettings>): Promise<OverlaySettings>;
     resize(width: number, height: number): Promise<void>;
+    /** The overlay takes the keyboard (to write in the chat) or gives it back (0.8+). */
+    input?(on: boolean): Promise<void>;
   };
   /** Changes a global shortcut (Electron accelerator; null = default). */
   setHotkey?(
-    name: 'overlay' | 'mute' | 'window',
+    name: 'overlay' | 'mute' | 'window' | 'chat',
     accelerator: string | null,
-  ): Promise<{ ok: boolean; error?: string; hotkeys?: Record<'overlay' | 'mute' | 'window', string> }>;
+  ): Promise<{ ok: boolean; error?: string; hotkeys?: Record<'overlay' | 'mute' | 'window' | 'chat', string> }>;
   /** Suspends global shortcuts while a new one is being recorded. */
   pauseHotkeys?(paused: boolean): Promise<void>;
   /** Enables the global shortcuts for the duration of a call. */
   setInCall?(inCall: boolean): Promise<void>;
-  onHotkey?(cb: (name: 'overlay' | 'mute' | 'window') => void): () => void;
+  onHotkey?(cb: (name: 'overlay' | 'mute' | 'window' | 'chat') => void): () => void;
   /** Tells the app the page's language (menus, dialogs, update window follow it). */
   setLanguage?(lang: 'pl' | 'en'): Promise<void>;
 }

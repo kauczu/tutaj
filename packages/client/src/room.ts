@@ -591,6 +591,7 @@ export class Room {
     } else if (msg.t === 'chat') {
       this.chat.addMessage(peer.state.name, msg.text, msg.ts, false);
       notifyChat(peer.state.name, msg.text, this.chat.open, () => this.chat.toggle(true));
+      this.overlay?.chatMessage(peer.state.name, msg.text, false);
     } else if (msg.t === 'reaction') {
       // No floods: at most ~4 per second per participant.
       const now = Date.now();
@@ -795,6 +796,7 @@ export class Room {
   private sendChat(text: string): void {
     const msg: AppMessage = { t: 'chat', id: crypto.randomUUID(), text, ts: Date.now() };
     this.chat.addMessage(this.opts.name, text, msg.ts, true);
+    this.overlay?.chatMessage(this.opts.name, text, true);
     this.sendApp(msg);
   }
 
@@ -979,6 +981,7 @@ export class Room {
     const off = bridge.onHotkey((name) => {
       if (name === 'overlay') void this.setOverlay(!this.overlay?.isOpen);
       else if (name === 'mute') void this.toggleMic().then(() => playCue(this.media.audioEnabled && !!this.media.audioTrack));
+      else if (name === 'chat') void this.writeOnOverlay();
     });
     this.cleanups.push(off, () => {
       this.overlay?.close();
@@ -986,6 +989,22 @@ export class Room {
     });
     if (settings.enabled) this.overlay.open();
     this.updateControls();
+  }
+
+  /**
+   * Chat shortcut (desktop app): a field to write in over the game. The overlay takes the keyboard
+   * just for that and gives it back after Enter/Esc. Opens the overlay first if it is hidden.
+   */
+  private async writeOnOverlay(): Promise<void> {
+    const bridge = window.tutaj;
+    if (!this.overlay || !bridge?.overlay?.input || this.overlay.isWriting) return;
+    if (!this.overlay.isOpen) await this.setOverlay(true);
+    if (!this.overlay.isOpen) return;
+    await bridge.overlay.input(true);
+    this.overlay.writeMessage(
+      (text) => this.sendChat(text),
+      () => void bridge.overlay?.input?.(false),
+    );
   }
 
   private setOverlayButton(hotkeys?: Record<string, string>): void {
@@ -1076,11 +1095,14 @@ export class Room {
     let hotkeys = initial;
     const error = h('p', { class: 'error small' });
     error.hidden = true;
-    const labels: [HotkeyName, string][] = [
-      ['overlay', t('hk.overlay')],
-      ['mute', t('hk.mute')],
-      ['window', t('hk.window')],
-    ];
+    const labels = (
+      [
+        ['overlay', t('hk.overlay')],
+        ['mute', t('hk.mute')],
+        ['window', t('hk.window')],
+        ['chat', t('hk.chat')],
+      ] as [HotkeyName, string][]
+    ).filter(([name]) => name in initial); // an older app version knows fewer shortcuts
     const buttons = new Map<HotkeyName, HTMLButtonElement>();
     let stopRecording: (() => void) | null = null;
     const showAll = () => {

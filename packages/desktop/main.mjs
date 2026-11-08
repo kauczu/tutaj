@@ -356,6 +356,19 @@ function registerIpc() {
     placeOverlay();
     return settings.overlay;
   }));
+  // Writing in the chat over the game: the overlay takes the keyboard (and mouse) for that moment only.
+  ipcMain.handle('tutaj:overlay-input', guard((on) => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) return;
+    if (on) {
+      overlayWindow.setIgnoreMouseEvents(false);
+      overlayWindow.setFocusable(true);
+      overlayWindow.focus();
+    } else {
+      overlayWindow.setIgnoreMouseEvents(true);
+      overlayWindow.setFocusable(false);
+      overlayWindow.blur();
+    }
+  }));
   ipcMain.handle('tutaj:overlay-resize', guard((width, height) => {
     overlaySize = { width: clampInt(width, 1, 1600), height: clampInt(height, 1, 2000) };
     placeOverlay();
@@ -541,7 +554,12 @@ function setInCall(on) {
 
 /** Global shortcuts, active only during a call: they work while a game has focus. */
 function defaultHotkeys() {
-  return { overlay: 'CommandOrControl+Shift+O', mute: 'CommandOrControl+Shift+M', window: 'CommandOrControl+Shift+H' };
+  return {
+    overlay: 'CommandOrControl+Shift+O',
+    mute: 'CommandOrControl+Shift+M',
+    window: 'CommandOrControl+Shift+H',
+    chat: 'CommandOrControl+Shift+C',
+  };
 }
 
 function sanitizeHotkeys(h) {

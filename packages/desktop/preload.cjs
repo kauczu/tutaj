@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('tutaj', {
     get: () => ipcRenderer.invoke('tutaj:overlay-get'),
     set: (patch) => ipcRenderer.invoke('tutaj:overlay-set', patch),
     resize: (width, height) => ipcRenderer.invoke('tutaj:overlay-resize', width, height),
+    /** Writing in the chat over the game: the overlay takes the keyboard (true) or gives it back (false). */
+    input: (on) => ipcRenderer.invoke('tutaj:overlay-input', on),
   },
   /** Changes a global shortcut ('overlay' | 'mute') to an Electron accelerator; null = default. → { ok, error?, hotkeys? } */
   setHotkey: (name, accelerator) => ipcRenderer.invoke('tutaj:hotkey-set', name, accelerator),

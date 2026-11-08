@@ -101,12 +101,14 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
             list(
               ['Włączysz ją przyciskiem z ikoną ekranu na pasku rozmowy, skrótem albo w Ustawieniach → „Nakładka i skróty” (tam też monitor, róg, rozmiar, krycie).'],
               ['Gra musi działać w trybie ', b('„pełny ekran w oknie” / bez ramek'), ' — nad wyłącznym pełnym ekranem żadne okno się nie pokaże.'],
+              ['Nowe wiadomości z czatu pokazują się na nakładce przez kilkanaście sekund.'],
             ),
             p('Skróty działające także w grze (tylko w trakcie rozmowy; zmienisz je w Ustawieniach → Nakładka i skróty):'),
             keys([
               [formatAccelerator(hotkeys.overlay), 'pokaż/ukryj nakładkę'],
               [formatAccelerator(hotkeys.mute), 'wycisz/włącz mikrofon (z sygnałem dźwiękowym)'],
               [formatAccelerator(hotkeys.window), 'zminimalizuj/przywróć okno rozmowy'],
+              ...(hotkeys.chat ? ([[formatAccelerator(hotkeys.chat), 'napisz na czacie nad grą (Enter — wyślij, Esc — wróć do gry)']] as [string, string][]) : []),
             ]),
           ),
         ]
@@ -216,12 +218,14 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
             list(
               ['Turn it on with the screen button on the call bar, a shortcut, or Settings → “Overlay & shortcuts” (also monitor, corner, size, opacity).'],
               ['The game must run in ', b('“windowed fullscreen” / borderless'), ' mode — nothing can show over exclusive fullscreen.'],
+              ['New chat messages show on the overlay for a dozen seconds or so.'],
             ),
             p('Shortcuts that also work in a game (during a call only; change them in Settings → Overlay & shortcuts):'),
             keys([
               [formatAccelerator(hotkeys.overlay), 'show/hide the overlay'],
               [formatAccelerator(hotkeys.mute), 'mute/unmute the microphone (with a sound)'],
               [formatAccelerator(hotkeys.window), 'minimize/restore the call window'],
+              ...(hotkeys.chat ? ([[formatAccelerator(hotkeys.chat), 'write in the chat over the game (Enter — send, Esc — back to the game)']] as [string, string][]) : []),
             ]),
           ),
         ]

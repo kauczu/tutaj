@@ -54,7 +54,26 @@ video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tile.muted .label .mic { display: inline-flex; }
 ${REACTION_CSS}
 .tile.no-video .reaction { bottom: -10%; font-size: 26px; }
+/* Chat over the game: the latest messages for a while, and a field to write (shortcut). */
+.chat { display: flex; flex-direction: column; gap: 4px; width: var(--w); }
+.chat:empty { display: none; }
+.msg { padding: 5px 9px; border-radius: 9px; font-size: 14px; line-height: 1.35; background: rgba(4, 11, 28, 0.82);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); word-wrap: break-word; animation: msg-in 0.2s ease-out; }
+.msg b { color: #a8c4d8; font-weight: 600; margin-right: 4px; }
+.msg.self b { color: #4fd1a5; }
+.msg.fading { opacity: 0; transition: opacity 0.6s; }
+@keyframes msg-in { from { opacity: 0; transform: translateY(4px); } }
+.chat-input { display: flex; flex-direction: column; gap: 3px; padding: 6px; border-radius: 10px; background: rgba(4, 11, 28, 0.92);
+  box-shadow: 0 0 0 2px #4d9aca, 0 2px 10px rgba(0, 0, 0, 0.6); }
+.chat-input input { font: inherit; font-size: 14px; color: #e8f1fa; background: rgba(16, 31, 72, 0.9); border: 0; border-radius: 7px;
+  padding: 7px 9px; outline: none; user-select: text; }
+.chat-input small { font-size: 11px; color: #93aec9; padding: 0 2px; }
 `;
+
+/** How long a chat message stays over the game. */
+const MESSAGE_MS = 15_000;
+/** At most this many messages at once. */
+const MAX_MESSAGES = 4;
 
 interface OverlayTile {
   el: HTMLDivElement;
@@ -77,6 +96,9 @@ export class GameOverlay {
   private offGrid: (() => void) | null = null;
   private offReactions: (() => void) | null = null;
   private lastSize = '';
+  /** Chat over the game: recent messages and, while writing, the input field. */
+  private chatBox: HTMLDivElement | null = null;
+  private writing: (() => void) | null = null;
 
   constructor(
     private readonly grid: Grid,
@@ -113,6 +135,8 @@ export class GameOverlay {
     this.offReactions = null;
     for (const t of this.tiles.values()) t.video.srcObject = null;
     this.tiles.clear();
+    this.writing?.();
+    this.chatBox = null;
     this.win = null;
     if (win && !win.closed) win.close();
   }
@@ -136,7 +160,74 @@ export class GameOverlay {
     badge.append(doc.createElement('span'));
     badge.lastElementChild!.textContent = t('ov.micMuted');
     root.append(badge);
+    this.chatBox = doc.createElement('div');
+    this.chatBox.className = 'chat';
     doc.body.replaceChildren(root);
+  }
+
+  /** A chat message shows over the game for a while (ours too, so the conversation reads in order). */
+  chatMessage(from: string, text: string, self: boolean): void {
+    const doc = this.win && !this.win.closed ? this.win.document : null;
+    if (!doc || !this.chatBox) return;
+    const el = doc.createElement('div');
+    el.className = `msg${self ? ' self' : ''}`;
+    const name = doc.createElement('b');
+    name.textContent = `${from}:`;
+    el.append(name, text.length > 200 ? `${text.slice(0, 197)}…` : text);
+    const input = this.chatBox.querySelector('.chat-input');
+    this.chatBox.insertBefore(el, input);
+    const msgs = this.chatBox.querySelectorAll('.msg');
+    if (msgs.length > MAX_MESSAGES) msgs[0].remove();
+    setTimeout(() => {
+      el.classList.add('fading');
+      setTimeout(() => {
+        el.remove();
+        this.render();
+      }, 600);
+    }, MESSAGE_MS);
+    this.render();
+  }
+
+  get isWriting(): boolean {
+    return !!this.writing;
+  }
+
+  /**
+   * A field to write in, over the game (the app gives the overlay the keyboard for that moment).
+   * Enter sends, Esc or an empty Enter cancels; `onDone` runs either way.
+   */
+  writeMessage(send: (text: string) => void, onDone: () => void): void {
+    const doc = this.win && !this.win.closed ? this.win.document : null;
+    if (!doc || !this.chatBox || this.writing) return;
+    const box = doc.createElement('div');
+    box.className = 'chat-input';
+    const input = doc.createElement('input');
+    input.maxLength = 2000;
+    input.placeholder = t('ov.chatPlaceholder');
+    const hint = doc.createElement('small');
+    hint.textContent = t('ov.chatHint');
+    box.append(input, hint);
+    this.chatBox.append(box);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      this.writing = null;
+      box.remove();
+      this.render();
+      onDone();
+    };
+    this.writing = finish;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') return finish();
+      if (e.key !== 'Enter') return;
+      const text = input.value.trim();
+      if (text) send(text);
+      finish();
+    });
+    input.addEventListener('blur', () => setTimeout(finish, 50));
+    this.render();
+    input.focus();
   }
 
   private render(): void {
@@ -166,8 +257,9 @@ export class GameOverlay {
     const badge = doc.getElementById('muted-badge')!;
     const ordered = others.map((t) => this.tiles.get(t.id)!.el);
     // Badge on the screen edge side: top corners above the tiles, bottom corners below.
-    if (this.settings.corner.startsWith('bottom')) root.replaceChildren(...ordered, badge);
-    else root.replaceChildren(badge, ...ordered);
+    const chat = this.chatBox ? [this.chatBox] : [];
+    if (this.settings.corner.startsWith('bottom')) root.replaceChildren(...chat, ...ordered, badge);
+    else root.replaceChildren(badge, ...ordered, ...chat);
     this.reportSize(root);
   }
 
@@ -209,7 +301,8 @@ export class GameOverlay {
   /** The window is exactly as big as its content, so it covers no more of the game than needed. */
   private reportSize(root: HTMLElement): void {
     const r = root.getBoundingClientRect();
-    const empty = root.querySelectorAll('.tile').length === 0 && (root.querySelector('#muted-badge') as HTMLElement).hidden;
+    const empty =
+      root.querySelectorAll('.tile, .msg, .chat-input').length === 0 && (root.querySelector('#muted-badge') as HTMLElement).hidden;
     const width = empty ? 1 : Math.ceil(r.width);
     const height = empty ? 1 : Math.ceil(r.height);
     const key = `${width}x${height}`;
