@@ -428,6 +428,8 @@ dialog.settings-dialog { width: min(900px, calc(100% - 32px)); }
 .settings-panel[hidden] { display: none; }
 .settings-panel h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--accent-bright); }
 .settings-panel .about { border-top: 0; padding-top: 4px; }
+.settings-form label.check-row { display: flex; align-items: center; gap: 10px; color: var(--text); }
+.settings-form label.check-row input { width: 18px; height: 18px; flex: none; margin: 0; accent-color: var(--accent); }
 .dialog-foot { display: flex; justify-content: flex-end; }
 .dialog-foot .primary { min-width: 140px; }
 @media (max-width: 640px) {

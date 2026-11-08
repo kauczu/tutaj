@@ -131,6 +131,7 @@
         </div>
         <div class="buttons">
           <button id="btn-mic" class="round" type="button" title="Mikrofon (M)" data-i18n-title="ctl.mic"></button>
+          <button id="btn-echo" class="round secondary" type="button" hidden></button>
           <button id="btn-cam" class="round" type="button" title="Kamera (V)" data-i18n-title="ctl.cam"></button>
           <button id="btn-screen" class="round secondary" type="button" title="Udostępnij ekran (S)" data-i18n-title="ctl.screen"></button>
           <button id="btn-hand" class="round secondary" type="button" title="Podnieś rękę (H)" data-i18n-title="ctl.hand"></button>
@@ -169,6 +170,7 @@
               <label><span data-i18n="set.mic">Mikrofon</span> <select id="set-audio-input"></select></label>
               <label><span data-i18n="set.camera">Kamera</span> <select id="set-video-input"></select></label>
               <label id="set-audio-output-wrap"><span data-i18n="set.speaker">Głośnik</span> <select id="set-audio-output"></select></label>
+              <label class="check-row"><input id="set-chat-sound" type="checkbox" /> <span data-i18n="set.chatSound">Dźwięk nowej wiadomości na czacie</span></label>
             </section>
             <section id="panel-quality" class="settings-panel" role="tabpanel" aria-labelledby="tab-quality" hidden>
               <h3 data-i18n="tab.quality">Jakość</h3>

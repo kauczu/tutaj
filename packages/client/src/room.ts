@@ -19,6 +19,7 @@ import { GameOverlay, type OverlaySettings } from './ui/overlay';
 import { PipWindow } from './ui/pip';
 import { settingsTabs } from './ui/settings-tabs';
 import { CompactLayout } from './ui/compact';
+import { chatSoundOn, notifyChat, playChatSound, setChatSound } from './ui/chat-notify';
 import { renderQualityForm } from './ui/quality-form';
 import { REACTIONS, type Reaction } from './ui/reactions';
 import { toast } from './ui/toast';
@@ -589,6 +590,7 @@ export class Room {
       this.grid.get(from)?.setState(msg.state);
     } else if (msg.t === 'chat') {
       this.chat.addMessage(peer.state.name, msg.text, msg.ts, false);
+      notifyChat(peer.state.name, msg.text, this.chat.open, () => this.chat.toggle(true));
     } else if (msg.t === 'reaction') {
       // No floods: at most ~4 per second per participant.
       const now = Date.now();
@@ -838,6 +840,7 @@ export class Room {
     on('btn-settings', () => void this.openSettings());
     on('btn-leave', () => void this.leave());
     on('btn-invite', () => void this.copyInvite());
+    on('btn-echo', () => void this.toggleEcho());
     this.compact = new CompactLayout(this.grid, () => this.phoneItems());
     this.cleanups.push(this.grid.onChange(() => this.compact?.refresh()));
     this.cleanups.push(() => this.compact?.close());
@@ -867,6 +870,7 @@ export class Room {
         s: () => void this.toggleScreen(),
         h: () => this.toggleHand(),
         c: () => this.chat.toggle(),
+        e: () => void this.toggleEcho(),
       };
       const action = actions[e.key.toLowerCase()];
       if (action) {
@@ -890,6 +894,18 @@ export class Room {
     const onHide = () => this.signaling.send({ type: 'leave' });
     window.addEventListener('pagehide', onHide);
     this.cleanups.push(() => window.removeEventListener('pagehide', onHide));
+  }
+
+  /** Studio audio: echo cancellation on/off right from the call bar (same setting as in Settings → Quality). */
+  private async toggleEcho(): Promise<void> {
+    const q = this.media.quality;
+    if (q.audio !== 'studio') return;
+    try {
+      await this.media.setQuality({ ...q, echoCancel: !q.echoCancel });
+      toast(t(this.media.quality.echoCancel ? 'room.echoOn' : 'room.echoOff'));
+    } catch (e) {
+      toast(t('media.micProblem', { error: describeMediaError(e) }), 'error');
+    }
   }
 
   /** "More" menu extras on a phone: front/back camera. */
@@ -924,6 +940,15 @@ export class Room {
     $('btn-record').classList.toggle('recording', this.recorder.active);
     setIcon($('btn-settings'), 'settings');
     setIcon($('btn-more'), 'more');
+    // Echo cancellation: only means something for studio audio (voice always has it).
+    const echo = $('btn-echo');
+    const studio = this.media.quality.audio === 'studio';
+    const echoOn = this.media.quality.echoCancel;
+    echo.hidden = !studio;
+    setIcon(echo, 'echo');
+    echo.classList.toggle('active', studio && echoOn);
+    echo.setAttribute('aria-pressed', String(studio && echoOn));
+    echo.title = t(echoOn ? 'ctl.echoOn' : 'ctl.echoOff');
     if (this.localTile.mirrorSelf !== (this.media.facing !== 'environment')) {
       this.localTile.mirrorSelf = this.media.facing !== 'environment';
       this.localTile.setState(this.myState());
@@ -1291,6 +1316,12 @@ export class Room {
       ? t('mode.info', { mode: this.mode === 'sfu' ? 'SFU' : 'P2P' })
       : t('mode.noSfu');
     modeSelect.onchange = () => this.signaling.send({ type: 'set-mode', pref: modeSelect.value as ModePreference });
+    const chatSound = $<HTMLInputElement>('set-chat-sound');
+    chatSound.checked = chatSoundOn();
+    chatSound.onchange = () => {
+      setChatSound(chatSound.checked);
+      if (chatSound.checked) playChatSound();
+    };
     this.renderHostSettings();
     renderQualityForm($('quality-room'), this.media, (msg) => toast(msg, 'error'));
     await this.renderOverlaySettings(); // decides whether the overlay topic is there at all
