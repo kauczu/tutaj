@@ -2,6 +2,8 @@ import { Emitter } from './emitter';
 import { AUDIO_BITRATE, loadQuality, micChanged, saveQuality, type QualitySettings } from './quality';
 import { t } from './i18n';
 import { ScreenAudioMix } from './screen-audio';
+import { MicBoost } from './mic-boost';
+import { ScreenCamera, loadScreenCamera, saveScreenCamera, screenCameraSupported, type ScreenCameraSetting } from './screen-camera';
 
 type MediaEvents = {
   /** Outgoing audio or video track changed (device switch, camera toggle, screen share). */
@@ -56,6 +58,12 @@ export class LocalMedia extends Emitter<MediaEvents> {
   screenTrack: MediaStreamTrack | null = null;
   /** Screen shared with sound: its sound mixed with the microphone (see ScreenAudioMix). */
   private screenMix: ScreenAudioMix | null = null;
+  /** Studio audio: the microphone made louder (see MicBoost). */
+  private micBoost: MicBoost | null = null;
+  /** Screen share with the camera drawn into a corner (see ScreenCamera). */
+  private screenCam: ScreenCamera | null = null;
+  /** Where the camera goes on a shared screen, or 'off'. */
+  screenCamera: ScreenCameraSetting = loadScreenCamera();
   audioDeviceId: string | undefined;
   videoDeviceId: string | undefined;
   /** Which way the camera looks, when the device says (phones): the back camera is not mirrored. */
@@ -83,16 +91,77 @@ export class LocalMedia extends Emitter<MediaEvents> {
     this.quality = q;
     saveQuality(q);
     if (this.audioTrack && micChanged(prev, q)) await this.setMicrophone(this.audioDeviceId);
+    else this.syncMicBoost();
     if (this.cameraTrack && prev.resolution !== q.resolution) await this.setCamera(true);
     this.emit('change', undefined);
   }
 
   get outgoingAudio(): MediaStreamTrack | null {
-    return this.screenMix?.track ?? this.audioTrack;
+    return this.screenMix?.track ?? this.sentMic;
+  }
+
+  /** The microphone as it goes out: boosted in studio mode, bare otherwise. */
+  private get sentMic(): MediaStreamTrack | null {
+    return this.micBoost?.ready ? this.micBoost.track : this.audioTrack;
+  }
+
+  /** Starts, updates or ends the studio microphone boost to match the settings. */
+  private syncMicBoost(): void {
+    const mic = this.audioTrack;
+    const db = this.quality.audio === 'studio' ? this.quality.micBoost : 0;
+    if (mic && db > 0) {
+      if (this.micBoost) {
+        this.micBoost.setMic(mic);
+        this.micBoost.setGain(db);
+      } else {
+        const boost = new MicBoost(mic, db, () => {
+          if (this.micBoost !== boost) return;
+          this.screenMix?.setMic(boost.track);
+          this.emit('change', undefined);
+        });
+        this.micBoost = boost;
+        this.screenMix?.setMic(this.sentMic);
+      }
+      return;
+    }
+    if (this.micBoost) {
+      this.screenMix?.setMic(mic);
+      this.micBoost.stop();
+      this.micBoost = null;
+    }
   }
 
   get outgoingVideo(): MediaStreamTrack | null {
-    return this.screenTrack ?? this.cameraTrack;
+    return this.screenCam?.track ?? this.screenTrack ?? this.cameraTrack;
+  }
+
+  /** Starts, updates or ends drawing the camera into the shared screen to match what is on. */
+  private syncScreenCamera(): void {
+    const want = !!this.screenTrack && !!this.cameraTrack && this.screenCamera !== 'off' && screenCameraSupported();
+    if (want && this.screenCamera !== 'off') {
+      if (this.screenCam) {
+        this.screenCam.setCamera(this.cameraTrack!);
+        this.screenCam.setCorner(this.screenCamera);
+      } else {
+        try {
+          this.screenCam = new ScreenCamera(this.screenTrack!, this.cameraTrack!, this.screenCamera);
+        } catch {
+          this.screenCam = null; // the screen goes out alone, as before
+        }
+      }
+      return;
+    }
+    this.screenCam?.stop();
+    this.screenCam = null;
+  }
+
+  /** Where the camera goes on a shared screen (remembered); applies right away. */
+  setScreenCamera(v: ScreenCameraSetting): void {
+    this.screenCamera = v;
+    saveScreenCamera(v);
+    const before = this.outgoingVideo;
+    this.syncScreenCamera();
+    if (this.outgoingVideo !== before) this.emit('change', undefined);
   }
 
   get cameraOn(): boolean {
@@ -137,7 +206,8 @@ export class LocalMedia extends Emitter<MediaEvents> {
     this.audioTrack?.stop();
     track.enabled = this.audioEnabled;
     this.audioTrack = track;
-    this.screenMix?.setMic(track);
+    this.syncMicBoost();
+    this.screenMix?.setMic(this.sentMic);
     this.audioDeviceId = track.getSettings().deviceId ?? deviceId;
     this.emit('change', undefined);
   }
@@ -152,6 +222,7 @@ export class LocalMedia extends Emitter<MediaEvents> {
     if (!on) {
       this.cameraTrack?.stop();
       this.cameraTrack = null;
+      this.syncScreenCamera();
       this.emit('change', undefined);
       return;
     }
@@ -160,6 +231,7 @@ export class LocalMedia extends Emitter<MediaEvents> {
     this.cameraTrack?.stop();
     this.cameraTrack = track;
     this.videoDeviceId = track.getSettings().deviceId ?? deviceId;
+    this.syncScreenCamera();
     this.emit('change', undefined);
   }
 
@@ -171,6 +243,7 @@ export class LocalMedia extends Emitter<MediaEvents> {
     this.cameraTrack?.stop();
     this.cameraTrack = track;
     this.videoDeviceId = track.getSettings().deviceId;
+    this.syncScreenCamera();
     this.emit('change', undefined);
   }
 
@@ -186,7 +259,8 @@ export class LocalMedia extends Emitter<MediaEvents> {
     track.addEventListener('ended', () => this.stopScreen());
     this.screenTrack = track;
     const sound = stream.getAudioTracks()[0];
-    if (sound) this.screenMix = new ScreenAudioMix(this.audioTrack, sound);
+    if (sound) this.screenMix = new ScreenAudioMix(this.sentMic, sound);
+    this.syncScreenCamera();
     this.emit('change', undefined);
   }
 
@@ -196,12 +270,17 @@ export class LocalMedia extends Emitter<MediaEvents> {
     this.screenTrack = null;
     this.screenMix?.stop();
     this.screenMix = null;
+    this.syncScreenCamera();
     this.emit('change', undefined);
   }
 
   stop(): void {
     this.screenMix?.stop();
     this.screenMix = null;
+    this.screenCam?.stop();
+    this.screenCam = null;
+    this.micBoost?.stop();
+    this.micBoost = null;
     for (const t of [this.audioTrack, this.cameraTrack, this.screenTrack]) t?.stop();
     this.audioTrack = this.cameraTrack = this.screenTrack = null;
   }

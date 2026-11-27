@@ -65,6 +65,7 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
         ['Nowa wiadomość przy zamkniętym czacie: krótki dźwięk i dymek z treścią (gdy okno jest w tle — powiadomienie systemowe w aplikacji desktopowej). Dźwięk wyłączysz w Ustawieniach → Urządzenia.'],
         [b('Nagrywanie'), ' zapisuje rozmowę na Twoim komputerze (plik .webm); pozostali dostają informację w czacie.'],
         [b('Ekran z dźwiękiem'), ': w aplikacji desktopowej zaznacz w oknie wyboru „Udostępnij też dźwięk komputera”, w Chrome/Edge — opcję udostępniania dźwięku. Rozmówcy usłyszą np. grę lub film (bez dźwięku samej rozmowy, więc nie usłyszą siebie); wyciszony mikrofon wycisza tylko Twój głos.'],
+        [b('Kamera na udostępnianym ekranie'), ': gdy masz włączoną kamerę, rozmówcy widzą Cię w rogu udostępnianego ekranu (Chrome/Edge i aplikacja desktopowa). Róg wybierzesz albo kamerę wyłączysz w Ustawieniach → Urządzenia.'],
       ),
     ),
     section(
@@ -81,6 +82,7 @@ function polish({ hotkeys, desktop }: Context): HTMLElement[] {
       list(
         ['Ustawienia → Jakość → ', b('Profil jakości'), ': „Rozmowa” (domyślny) albo „Gra” — dźwięk studyjny, kamera 1080p, limit wysyłania 4 Mb/s.'],
         [b('Dźwięk studyjny'), ' jest bez redukcji echa i szumów — najlepiej na słuchawkach. Grasz na głośnikach? Zaznacz „Usuwanie echa”: zostaje stereo i bez innych filtrów, a rozmówcy nie usłyszą siebie (dźwięk gry z głośników nadal mogą słyszeć).'],
+        [b('Wzmocnienie mikrofonu'), ' (przy dźwięku studyjnym): studyjny nie wyrównuje głośności sam, więc mikrofon jest podgłaśniany o stałą wartość (domyślnie +12 dB, z ogranicznikiem, który nie dopuszcza do przesterowania). Rozmówcy mówią, że jesteś za cicho albo za głośno? Zmień je w Ustawieniach → Jakość.'],
         ['Znacznik ', b('GPU'), ' / ', b('CPU'), ' na pasku: czy obraz koduje karta graficzna (lepiej podczas gry), czy procesor.'],
         [b('P2P'), ' — obraz płynie bezpośrednio między uczestnikami; ', b('SFU'), ' — przez serwer (przy 3–4 osobach lub słabym łączu). Przełącza się samo; można wybrać ręcznie w Ustawieniach → Połączenie.'],
       ),
@@ -183,6 +185,7 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
         ['A new message while the chat is closed: a short sound and a bubble with the text (with the window in the background — a system notification in the desktop app). Turn the sound off in Settings → Devices.'],
         [b('Recording'), ' saves the call on your computer (a .webm file); the others get a note in the chat.'],
         [b('Screen with sound'), ': in the desktop app tick “Share the computer’s sound too” in the picker; in Chrome/Edge, the option to share audio. The others hear e.g. a game or a film (without the call’s own sound, so they don’t hear themselves); a muted microphone mutes only your voice.'],
+        [b('Camera on the shared screen'), ': with your camera on, the others see you in a corner of the shared screen (Chrome/Edge and the desktop app). Choose the corner, or turn it off, in Settings → Devices.'],
       ),
     ),
     section(
@@ -199,6 +202,7 @@ function english({ hotkeys, desktop }: Context): HTMLElement[] {
       list(
         ['Settings → Quality → ', b('Quality profile'), ': “Call” (default) or “Game” — studio audio, 1080p camera, 4 Mb/s upload limit.'],
         [b('Studio audio'), ' has no echo cancellation or noise suppression — best with headphones. Playing on speakers? Tick “Echo cancellation”: it stays stereo with no other filters, and the others won’t hear themselves (they may still hear your game from the speakers).'],
+        [b('Microphone boost'), ' (with studio audio): studio audio doesn’t even out the volume by itself, so the microphone is raised by a fixed amount (+12 dB by default, with a limiter so it never distorts). Told you are too quiet or too loud? Change it in Settings → Quality.'],
         ['The ', b('GPU'), ' / ', b('CPU'), ' badge on the bar: whether the graphics card encodes your video (better while gaming) or the processor.'],
         [b('P2P'), ' — video goes directly between participants; ', b('SFU'), ' — via the server (with 3–4 people or a slow connection). It switches by itself; you can choose by hand in Settings → Connection.'],
       ),

@@ -21,6 +21,7 @@ import { settingsTabs } from './ui/settings-tabs';
 import { CompactLayout } from './ui/compact';
 import { chatSoundOn, notifyChat, playChatSound, setChatSound } from './ui/chat-notify';
 import { renderQualityForm } from './ui/quality-form';
+import { screenCameraSupported, type ScreenCameraSetting } from './screen-camera';
 import { REACTIONS, type Reaction } from './ui/reactions';
 import { toast } from './ui/toast';
 
@@ -1339,6 +1340,11 @@ export class Room {
       ? t('mode.info', { mode: this.mode === 'sfu' ? 'SFU' : 'P2P' })
       : t('mode.noSfu');
     modeSelect.onchange = () => this.signaling.send({ type: 'set-mode', pref: modeSelect.value as ModePreference });
+    // Camera drawn into the shared screen (Chrome/Edge/desktop app only).
+    const screenCamera = $<HTMLSelectElement>('set-screen-camera');
+    $('set-screen-camera-wrap').hidden = !screenCameraSupported();
+    screenCamera.value = this.media.screenCamera;
+    screenCamera.onchange = () => this.media.setScreenCamera(screenCamera.value as ScreenCameraSetting);
     const chatSound = $<HTMLInputElement>('set-chat-sound');
     chatSound.checked = chatSoundOn();
     chatSound.onchange = () => {

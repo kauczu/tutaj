@@ -15,7 +15,9 @@ async function join(room: string, name: string, browser: Parameters<typeof Parti
   return p;
 }
 
-const GAME = { audio: 'studio', resolution: 1080, uploadKbps: 4000, codec: 'auto' };
+// No microphone boost: these checks read the microphone's own settings off the sent track.
+const GAME = { audio: 'studio', resolution: 1080, uploadKbps: 4000, codec: 'auto', micBoost: 0 };
+const CALL = { audio: 'voice', resolution: 720, uploadKbps: 0, codec: 'auto', micBoost: 0 };
 
 interface MediaInfo {
   sfu: boolean;
@@ -77,7 +79,7 @@ function mediaInfo(page: Page): Promise<MediaInfo[]> {
 test('gaming profile over P2P: studio stereo audio with redundancy, 1080p capture, upload limit', async ({ browser }) => {
   srv = await startTestServer();
   const ania = await join('gra', 'Ania', browser, GAME);
-  const bartek = await join('gra', 'Bartek', browser);
+  const bartek = await join('gra', 'Bartek', browser, CALL);
   await ania.expectVideoFrom('Bartek');
   await bartek.expectVideoFrom('Ania');
 

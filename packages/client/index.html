@@ -169,6 +169,15 @@
               <h3 data-i18n="tab.devices">Urządzenia</h3>
               <label><span data-i18n="set.mic">Mikrofon</span> <select id="set-audio-input"></select></label>
               <label><span data-i18n="set.camera">Kamera</span> <select id="set-video-input"></select></label>
+              <label id="set-screen-camera-wrap" hidden><span data-i18n="set.screenCamera">Kamera na udostępnianym ekranie</span>
+                <select id="set-screen-camera">
+                  <option value="bottom-right" data-i18n="set.screenCamera.bottom-right">W prawym dolnym rogu</option>
+                  <option value="bottom-left" data-i18n="set.screenCamera.bottom-left">W lewym dolnym rogu</option>
+                  <option value="top-right" data-i18n="set.screenCamera.top-right">W prawym górnym rogu</option>
+                  <option value="top-left" data-i18n="set.screenCamera.top-left">W lewym górnym rogu</option>
+                  <option value="off" data-i18n="set.screenCamera.off">Nie pokazuj</option>
+                </select>
+              </label>
               <label id="set-audio-output-wrap"><span data-i18n="set.speaker">Głośnik</span> <select id="set-audio-output"></select></label>
               <label class="check-row"><input id="set-chat-sound" type="checkbox" /> <span data-i18n="set.chatSound">Dźwięk nowej wiadomości na czacie</span></label>
             </section>

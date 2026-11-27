@@ -1,6 +1,6 @@
 import type { LocalMedia } from '../media';
 import { describeMediaError } from '../media';
-import { PROFILES, UPLOAD_LIMITS, hasHardwareH264, profileOf, withProfile, type ProfileId, type QualitySettings } from '../quality';
+import { MIC_BOOSTS, PROFILES, UPLOAD_LIMITS, hasHardwareH264, profileOf, withProfile, type ProfileId, type QualitySettings } from '../quality';
 import { h } from './dom';
 import { locale, t } from '../i18n';
 
@@ -36,6 +36,9 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
   echo.type = 'checkbox';
   echo.id = `${container.id}-echo`;
   const echoLabel = h('label', { class: 'check' }, echo, t('q.echo'));
+  const boost = h('select');
+  boost.id = `${container.id}-boost`;
+  const boostField = field(t('q.boost'), boost);
 
   const fill = (s: QualitySettings) => {
     const current = profileOf(s);
@@ -56,6 +59,8 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
     );
     echo.checked = s.echoCancel;
     echoLabel.hidden = s.audio !== 'studio';
+    boost.replaceChildren(...MIC_BOOSTS.map((db) => option(String(db), db ? `+${db} dB` : t('q.boost.none'), db === s.micBoost)));
+    boostField.hidden = s.audio !== 'studio';
     const notes: string[] = [];
     if (s.audio === 'studio') notes.push(t(s.echoCancel ? 'q.studioEchoHint' : 'q.studioHint'));
     if (s.uploadKbps) notes.push(t('q.uploadHint', { rate: mbps(s.uploadKbps) }));
@@ -76,8 +81,9 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
     uploadKbps: Number(upload.value),
     codec: codec.value === 'h264' || codec.value === 'vp8' ? codec.value : 'auto',
     echoCancel: echo.checked,
+    micBoost: Number(boost.value),
   });
-  for (const el of [audio, resolution, upload, codec, echo]) el.onchange = () => apply(read());
+  for (const el of [audio, resolution, upload, codec, echo, boost]) el.onchange = () => apply(read());
 
   const encoder = h('p', { class: 'muted small' });
   const checkEncoder = async () => {
@@ -103,6 +109,7 @@ export function renderQualityForm(container: HTMLElement, media: LocalMedia, onE
     field(t('q.profile'), profile),
     field(t('q.audio'), audio),
     echoLabel,
+    boostField,
     field(t('q.video'), resolution),
     field(t('q.upload'), upload),
     field(t('q.codec'), codec),

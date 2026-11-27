@@ -11,7 +11,8 @@ test.afterEach(async () => {
   people = [];
 });
 
-const GAME = { audio: 'studio', resolution: 720, uploadKbps: 0, codec: 'auto', echoCancel: false };
+// No microphone boost: these checks read the microphone's own settings off the sent track.
+const GAME = { audio: 'studio', resolution: 720, uploadKbps: 0, codec: 'auto', echoCancel: false, micBoost: 0 };
 const micEcho = (page: Page) =>
   page.evaluate(() => {
     const track = window.__pcs.flatMap((pc) => pc.getSenders()).find((s) => s.track?.kind === 'audio')?.track;

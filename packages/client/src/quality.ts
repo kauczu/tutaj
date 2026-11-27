@@ -16,14 +16,22 @@ export interface QualitySettings {
    * A property of your setup, not of a profile: profiles keep it as it is.
    */
   echoCancel: boolean;
+  /**
+   * Studio audio only: how much louder the microphone goes out, in dB (studio has no automatic gain
+   * control, so a plain mic is much quieter than in voice mode). A property of your setup, like echoCancel.
+   */
+  micBoost: number;
 }
 
 export type ProfileId = 'call' | 'game';
 
 export const PROFILES: Record<ProfileId, { settings: QualitySettings }> = {
-  call: { settings: { audio: 'voice', resolution: 720, uploadKbps: 0, codec: 'auto', echoCancel: false } },
-  game: { settings: { audio: 'studio', resolution: 1080, uploadKbps: 4000, codec: 'auto', echoCancel: false } },
+  call: { settings: { audio: 'voice', resolution: 720, uploadKbps: 0, codec: 'auto', echoCancel: false, micBoost: 12 } },
+  game: { settings: { audio: 'studio', resolution: 1080, uploadKbps: 4000, codec: 'auto', echoCancel: false, micBoost: 12 } },
 };
+
+/** Studio microphone boost choices, dB (0 = the bare microphone, as before). */
+export const MIC_BOOSTS = [0, 3, 6, 9, 12, 15, 18, 24];
 
 export const UPLOAD_LIMITS = [0, 1500, 3000, 4000, 6000, 10000];
 
@@ -47,6 +55,7 @@ export function loadQuality(): QualitySettings {
       if (UPLOAD_LIMITS.includes(raw.uploadKbps)) base.uploadKbps = raw.uploadKbps;
       if (raw.codec === 'auto' || raw.codec === 'h264' || raw.codec === 'vp8') base.codec = raw.codec;
       if (typeof raw.echoCancel === 'boolean') base.echoCancel = raw.echoCancel;
+      if (MIC_BOOSTS.includes(raw.micBoost)) base.micBoost = raw.micBoost;
     }
   } catch {
     /* defaults */
@@ -74,6 +83,7 @@ export function profileOf(q: QualitySettings): ProfileId | null {
 export const withProfile = (id: ProfileId, current: QualitySettings): QualitySettings => ({
   ...PROFILES[id].settings,
   echoCancel: current.echoCancel,
+  micBoost: current.micBoost,
 });
 
 /** Whether the microphone has to be re-opened to apply new settings. */
